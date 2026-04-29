@@ -192,7 +192,7 @@ function isMentionElement(node: Node | null): node is HTMLElement {
 function createMentionElement(mention: FeatureMentionInsertRequest) {
   const element = document.createElement("span");
   element.className =
-    "mx-0.5 inline-flex max-w-full cursor-pointer select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80 transition hover:bg-emerald-100";
+    "cocanvas-feature-mention mx-0.5 inline-flex max-w-full select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
   element.contentEditable = "false";
   element.dataset.mentionId = mention.id;
   element.dataset.mentionTitle = mention.title;
