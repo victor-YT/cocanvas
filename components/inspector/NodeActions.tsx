@@ -1,19 +1,21 @@
 import type { FeatureNode } from "@/lib/types/graph";
+import type { CodexFunctionId } from "@/components/codex/CodexChatPanel";
 
-const actions = [
-  "Explain",
-  "Improve",
-  "Generate missing test",
-  "Redo this part",
-  "Show evidence",
-  "Freeze scope",
+const actions: Array<{ label: string; functionId: CodexFunctionId }> = [
+  { label: "Explain", functionId: "explain" },
+  { label: "Improve", functionId: "implement" },
+  { label: "Generate missing test", functionId: "test" },
+  { label: "Redo this part", functionId: "fix" },
+  { label: "Show evidence", functionId: "review" },
+  { label: "Freeze scope", functionId: "scope" },
 ];
 
 type NodeActionsProps = {
   node?: FeatureNode;
+  onRunFunction: (id: CodexFunctionId) => void;
 };
 
-export function NodeActions({ node }: NodeActionsProps) {
+export function NodeActions({ node, onRunFunction }: NodeActionsProps) {
   const improvePrompt = node
     ? `Improve the ${node.name} feature. Only touch files linked to this feature unless necessary.`
     : "";
@@ -24,12 +26,13 @@ export function NodeActions({ node }: NodeActionsProps) {
       <div className="mt-3 grid grid-cols-2 gap-2">
         {actions.map((action) => (
           <button
-            key={action}
+            key={action.label}
             type="button"
             disabled={!node}
+            onClick={() => onRunFunction(action.functionId)}
             className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
           >
-            {action}
+            {action.label}
           </button>
         ))}
       </div>
