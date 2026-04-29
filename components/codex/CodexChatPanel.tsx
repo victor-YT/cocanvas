@@ -703,7 +703,14 @@ export function CodexChatPanel({
       return;
     }
 
-    setInput(serializeEditor(editor));
+    const nextInput = serializeEditor(editor);
+    const nextMentionIds = new Set(nextInput.mentionIds);
+
+    input.mentionIds
+      .filter((mentionId) => !nextMentionIds.has(mentionId))
+      .forEach((mentionId) => onMentionRemoved?.(mentionId));
+
+    setInput(nextInput);
     refreshMentionTrigger();
     updateEditorHeight();
   }

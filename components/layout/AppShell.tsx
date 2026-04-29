@@ -663,8 +663,11 @@ export function AppShell() {
 
   function handleMentionRemoved(mentionId: string) {
     const node = graph.nodes.find((item) => item.id === mentionId);
+    const missingRelatedFiles = new Set(missingRelatedFilesByNodeId[mentionId] ?? []);
+    const existingRelatedFiles =
+      node?.relatedFiles.filter((file) => !missingRelatedFiles.has(file)) ?? [];
 
-    if (!node || node.relatedFiles.length > 0) {
+    if (!node || existingRelatedFiles.length > 0) {
       return;
     }
 
