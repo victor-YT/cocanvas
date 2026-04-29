@@ -317,7 +317,7 @@ export function CodexChatPanel({
   }
 
   return (
-    <section className="relative w-full max-w-[860px] text-zinc-950">
+    <section className="relative w-full max-w-[720px] text-zinc-950">
       {hasConversation ? (
         <div className="mb-6 flex items-center gap-2 px-1 text-base text-zinc-500">
           <span>Editing</span>
@@ -328,7 +328,7 @@ export function CodexChatPanel({
         </div>
       ) : null}
 
-      <div className="mx-8 flex h-11 items-center justify-between rounded-t-[22px] border border-b-0 border-zinc-200 bg-white/92 px-5 text-sm shadow-sm backdrop-blur">
+      <div className="mx-7 flex h-10 items-center justify-between rounded-t-[20px] border border-b-0 border-zinc-200 bg-white/92 px-4 text-xs shadow-sm backdrop-blur">
         <div className="min-w-0 truncate text-zinc-500">
           {fileCount} files changed{" "}
           <span className="font-medium text-green-600">+258</span>{" "}
@@ -346,7 +346,7 @@ export function CodexChatPanel({
 
       <form
         onSubmit={handleSubmit}
-        className="relative rounded-[26px] border border-zinc-200 bg-white/95 p-4 shadow-[0_14px_34px_rgba(24,24,27,0.08)] backdrop-blur"
+        className="relative rounded-[24px] border border-zinc-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(24,24,27,0.08)] backdrop-blur"
       >
         {hasConversation ? (
           <button
@@ -364,7 +364,7 @@ export function CodexChatPanel({
         <textarea
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
-          className="h-14 w-full resize-none bg-transparent text-base leading-6 text-zinc-900 outline-none placeholder:text-zinc-300"
+          className="h-12 w-full resize-none bg-transparent text-[15px] leading-6 text-zinc-900 outline-none placeholder:text-zinc-300"
           placeholder={placeholder}
         />
 
@@ -396,7 +396,7 @@ export function CodexChatPanel({
             </button>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2.5">
             <SpinnerIcon />
             <button
               type="button"
@@ -423,7 +423,7 @@ export function CodexChatPanel({
               type="submit"
               aria-label={isReplaying ? "Stop task" : "Send message"}
               disabled={!isReplaying && draft.trim().length === 0}
-              className="grid h-11 w-11 place-items-center rounded-full bg-zinc-950 text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-100"
+              className="grid h-10 w-10 place-items-center rounded-full bg-zinc-950 text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-100"
             >
               {isReplaying || draft.trim().length === 0 ? <StopIcon /> : <ArrowUpIcon />}
             </button>
@@ -533,7 +533,7 @@ export function CodexChatPanel({
         ) : null}
       </form>
 
-      <div className="mt-3 flex items-center gap-8 px-6 text-sm text-zinc-500">
+      <div className="mt-2.5 flex items-center gap-7 px-5 text-xs text-zinc-500">
         <button
           type="button"
           onClick={() => updateOption("access", options.access === "workspace" ? "ask" : "workspace")}

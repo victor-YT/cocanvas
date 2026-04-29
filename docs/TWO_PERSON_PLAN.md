@@ -1,59 +1,49 @@
 # Two-Person Plan
 
-## Person A: Canvas & Demo Experience
+## Person A: Canvas and Demo Feel
 
-Owner of product feel, UI layout, canvas readability, timeline, inspector, and demo polish.
-
-Tasks:
-
-1. Replace static graph layout with React Flow.
-2. Polish `FeatureNode`, `ArtifactNode`, `GraphLegend`, and status transitions.
-3. Improve responsive layout for projector demo.
-4. Add small Framer Motion transitions after dependencies are installed.
-5. Keep `Run Demo Replay` visually strong.
-
-Success criteria:
-
-- The feature graph is understandable in 5 seconds.
-- The demo visibly moves from changed to risk to verified to drift.
-- The product feels calm, high-trust, and focused.
-
-## Person B: Graph Intelligence & Codex Events
-
-Owner of types, parser boundary, repo scanner, update logic, adapters, and route handlers.
+Owner of the visible product experience.
 
 Tasks:
 
-1. Expand `mockParsePrd` into structured parsing.
-2. Improve `mockRepoScan` and then add real filesystem scanning.
-3. Harden `mapPathToFeature` with path matching heuristics.
-4. Normalize real `codex exec --json` output.
-5. Add zod validation once dependencies are installed.
-6. Keep all emitted events in `CodexTimelineEvent` format.
+1. Polish the React Flow canvas, node cards, zoom behavior, and animations.
+2. Keep the page focused on the white dotted canvas.
+3. Improve the Codex input panel as a believable task entry surface.
+4. Tune mock replay pacing and visual states.
+5. Validate the demo as a skeptical user and flag confusing behavior quickly.
 
 Success criteria:
 
-- PRD plus repo artifacts produce graph JSON.
-- Codex-like events update feature states predictably.
-- Command results mark risk or verification.
-- UI never needs to know which adapter produced an event.
+- The graph is understandable in a few seconds.
+- Nodes appear, change status, and connect without visual clutter.
+- The product feels like a focused builder tool, not a generic dashboard.
 
-## Integration Milestones
+## Person B: Graph Events and Integration
 
-1. Mock event `src/auth/reset-token.ts` marks Password Reset `in_progress`.
-2. Mock passing test marks Password Reset `verified`.
-3. Mock unrelated file creates a purple `drift` node.
-4. API routes return the same contracts used by local mock state.
-5. Real `codex exec --json` adapter emits at least file and command events.
+Owner of the protocol, reducer, observer boundary, and API surface.
 
-## Risk Management
+Tasks:
 
-- Do not build a database.
-- Do not chase perfect parsing.
-- Do not build multi-repo support.
-- Use mock replay as the default demo path.
-- Keep UI and adapter contracts stable.
+1. Keep `GraphEvent[] -> reduceGraphEvents() -> ObservedGraphState` stable.
+2. Add validation for each JSONL graph event.
+3. Build the `codex exec --json` or Codex SDK adapter behind the same graph-event boundary.
+4. Add an observer step that turns Codex events, file changes, diffs, and test output into graph events.
+5. Keep mock replay working as the fallback demo path.
 
-## Fallback Demo Plan
+Success criteria:
 
-If live Codex integration fails, use `Run Demo Replay`. It demonstrates plan, file edit, test failure, patch, passing test, and drift without network or external process dependencies.
+- The frontend never knows whether events came from mock replay, Codex CLI, Codex SDK, or an observer model.
+- Invalid graph events are rejected or ignored without breaking the canvas.
+- Real Codex activity can produce at least node, evidence, risk, and status events.
+
+## Milestones
+
+1. Mock replay grows the observed feature graph.
+2. Reducer handles all five event types predictably.
+3. JSONL file loading works from `.cocanvas/graph-events.jsonl`.
+4. Live adapter appends graph events without replacing the whole graph.
+5. Observer model emits the same protocol from Codex activity.
+
+## Fallback
+
+`Run Demo` remains the primary fallback. It must work without credentials, a database, a running Codex process, or a network call.

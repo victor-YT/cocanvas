@@ -143,12 +143,6 @@ export function AppShell() {
                 <span className="font-semibold text-zinc-900">cocanvas</span>
                 <span className="ml-2 text-zinc-500">/projects/cocanvas</span>
               </div>
-              <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-sm shadow-sm">
-                <span className="font-medium text-zinc-900">Observed graph</span>
-                <span className="ml-2 text-zinc-500">
-                  {graph.nodes.length} nodes
-                </span>
-              </div>
               {notice ? (
                 <div className="rounded-full border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-500 shadow-sm">
                   {notice}

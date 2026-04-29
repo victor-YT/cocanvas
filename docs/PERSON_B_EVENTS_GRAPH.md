@@ -2,72 +2,73 @@
 
 ## Ownership
 
-Person B owns the logic behind the product experience:
+Person B owns the observed graph contract and every backend path that produces it:
 
-- Shared TypeScript contracts
-- PRD parser boundary
-- Repo scanner boundary
-- Feature graph construction
-- Path-to-feature mapping
-- Codex event normalization
-- Graph update rules
-- API route skeletons
-- Future `codex exec --json` integration
+- `GraphEvent` types
+- JSONL reading and validation
+- `reduceGraphEvents`
+- mock replay data
+- graph API routes
+- future Codex CLI, Codex SDK, App Server, or observer-model adapters
 
 ## Primary Files
 
-- `lib/types/*`
-- `lib/demo/*`
-- `lib/graph/*`
-- `lib/prd/*`
-- `lib/repo/*`
-- `lib/codex/*`
-- `lib/state/*`
-- `app/api/*`
-- `docs/DATA_CONTRACTS.md`
-- `docs/ARCHITECTURE.md`
+- `lib/types/observedGraph.ts`
+- `lib/graph/reduceGraphEvents.ts`
+- `lib/graph/readGraphEvents.ts`
+- `lib/demo/mockGraphEvents.ts`
+- `lib/state/graphStore.ts`
+- `app/api/graph/route.ts`
+- `app/api/events/route.ts`
+- `app/api/demo/replay/route.ts`
+- `app/api/graph/reset/route.ts`
 
-Avoid changing visual components unless Person A asks for contract support.
+Avoid changing canvas visuals unless Person A needs a contract change.
 
 ## First Goals
 
-1. Keep `CodexTimelineEvent` stable.
-2. Improve `mapPathToFeature` beyond exact path matching.
-3. Expand `updateGraphFromCodexEvent` while keeping rules readable.
-4. Make mock API routes return useful scaffold data.
-5. Start the `codex exec --json` adapter only after mock replay remains stable.
+1. Keep `GraphEvent[] -> reduceGraphEvents() -> ObservedGraphState` stable.
+2. Add runtime validation for every graph event line.
+3. Make `.cocanvas/graph-events.jsonl` append-only and safe to read.
+4. Build a live adapter that emits the same five graph event types.
+5. Keep `Run Demo` working as the fallback path at all times.
+
+## Event Types
+
+Only these event types should reach the canvas:
+
+1. `node.upsert`
+2. `edge.upsert`
+3. `status.update`
+4. `evidence.add`
+5. `risk.add`
+
+## Integration Plan
+
+The safest live path is:
+
+```text
+Codex activity
+  -> observer or adapter
+  -> append graph event JSONL
+  -> reduceGraphEvents()
+  -> canvas
+```
+
+The input source can be `codex exec --json`, Codex SDK, App Server, local file watching, or an OpenAI observer model. The frontend should not care which one produced the graph event.
 
 ## Success Criteria
 
-- A `file_change` event for `src/auth/reset-token.ts` marks Password Reset `in_progress`.
-- A passing test command marks Password Reset `verified`.
-- A failing test command marks Password Reset `risk`.
-- An unmapped file change creates a `drift` node.
-- The UI consumes graph state without knowing the event source.
+- A graph event can create a feature node.
+- Evidence creates an evidence node and a `supports` edge.
+- Risk creates a risk node and a `blocks` edge.
+- Status updates recolor the target node.
+- Unlinked work appears as a purple cluster node.
 
 ## Guardrails
 
-- Do not build a production database.
-- Do not overbuild PRD parsing.
-- Do not add full static analysis.
-- Do not change UI status semantics without coordinating with Person A.
-- Keep adapters behind `CodexEventSource`.
-- Keep mock replay working at all times.
-
-## Recommended Next Tasks
-
-1. Add zod schemas for incoming API payloads.
-2. Add path matching by basename and feature keywords.
-3. Add richer evidence IDs and event references.
-4. Add repo scan heuristics for tests, API routes, services, and UI files.
-5. Implement JSONL parsing for `codex exec --json`.
-6. Add a route or server-sent stream for normalized events.
-
-## Demo Checklist
-
-- Mock events still replay in order.
-- Event timestamps are fresh during replay.
-- Password Reset gets file-change evidence.
-- Test failure is visible as risk.
-- Test pass is visible as verification.
-- Drift node is created for `src/billing/subscription.ts`.
+- Do not rebuild the old PRD parser path.
+- Do not add a database for the hackathon demo.
+- Do not replace the whole graph file; append JSONL lines.
+- Do not let raw Codex output leak directly into React Flow.
+- Do not break mock replay while adding live integration.

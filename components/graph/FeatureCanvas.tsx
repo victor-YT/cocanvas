@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -8,6 +8,8 @@ import {
   MarkerType,
   Position,
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -83,26 +85,26 @@ const nodeTypeLabel: Record<ObservedNodeType, string> = {
 
 function defaultPosition(node: ObservedGraphNode, index: number) {
   if (node.nodeType === "feature") {
-    return { x: 70, y: 290 };
+    return { x: 0, y: 310 };
   }
 
   if (node.nodeType === "flow") {
-    return { x: 420, y: 85 + index * 180 };
+    return { x: 390, y: 80 + index * 195 };
   }
 
   if (node.nodeType === "capability") {
-    return { x: 420, y: 600 + index * 180 };
+    return { x: 390, y: 650 + index * 195 };
   }
 
   if (node.nodeType === "risk") {
-    return { x: 840, y: 170 + index * 165 };
+    return { x: 830, y: 165 + index * 185 };
   }
 
   if (node.nodeType === "evidence") {
-    return { x: 840, y: 535 + index * 165 };
+    return { x: 830, y: 550 + index * 185 };
   }
 
-  return { x: 1180, y: 300 + index * 170 };
+  return { x: 1240, y: 310 + index * 190 };
 }
 
 function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasNode[] {
@@ -174,7 +176,7 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div
-      className={`cocanvas-node w-[250px] rounded-xl border px-4 py-3 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${tone.card} ${
+      className={`cocanvas-node w-[292px] rounded-2xl border px-5 py-4 text-left shadow-[0_10px_30px_rgba(24,24,27,0.07)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(24,24,27,0.11)] ${tone.card} ${
         selected ? "ring-2 ring-zinc-950 ring-offset-2" : ""
       }`}
       role="button"
@@ -182,16 +184,20 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-[15px] font-semibold">{node.title}</div>
-          <div className="mt-1 text-xs font-medium text-zinc-500">
+          <div className="truncate text-lg font-semibold leading-6 tracking-normal">
+            {node.title}
+          </div>
+          <div className="mt-1.5 text-xs font-semibold uppercase text-zinc-500">
             {nodeTypeLabel[node.nodeType]}
           </div>
         </div>
-        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${tone.dot}`} />
+        <span className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${tone.dot}`} />
       </div>
-      <div className="mt-3 text-xs font-medium text-zinc-500">{tone.label}</div>
+      <div className="mt-4 inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600">
+        {tone.label}
+      </div>
       {node.summary ? (
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-500">
           {node.summary}
         </p>
       ) : null}
@@ -203,7 +209,7 @@ const nodeTypes = {
   observed: ObservedNodeCard,
 };
 
-export function FeatureCanvas({
+function FeatureCanvasInner({
   graph,
   selectedNodeId,
   onSelectNode,
@@ -211,11 +217,24 @@ export function FeatureCanvas({
   actionControls,
   chatPanel,
 }: FeatureCanvasProps) {
+  const { fitView } = useReactFlow<CanvasNode, Edge>();
   const nodes = useMemo(
     () => buildNodes(graph, selectedNodeId),
     [graph, selectedNodeId],
   );
   const edges = useMemo(() => buildEdges(graph), [graph]);
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void fitView({ padding: 0.34, maxZoom: 0.95, duration: 420 });
+    }, 80);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [edges.length, fitView, nodes.length]);
 
   return (
     <section className="relative min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm lg:min-h-[calc(100vh-24px)]">
@@ -250,8 +269,8 @@ export function FeatureCanvas({
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectNode(node.id)}
         fitView
-        fitViewOptions={{ padding: 0.28, maxZoom: 1.08 }}
-        defaultViewport={{ x: 80, y: 80, zoom: 0.82 }}
+        fitViewOptions={{ padding: 0.34, maxZoom: 0.95 }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.82 }}
         minZoom={0.35}
         maxZoom={1.6}
         nodesDraggable
@@ -273,5 +292,13 @@ export function FeatureCanvas({
         />
       </ReactFlow>
     </section>
+  );
+}
+
+export function FeatureCanvas(props: FeatureCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <FeatureCanvasInner {...props} />
+    </ReactFlowProvider>
   );
 }

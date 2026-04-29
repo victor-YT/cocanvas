@@ -1,22 +1,20 @@
 # cocanvas
 
-Live feature canvas for Codex-heavy builders.
+Live observed feature canvas for Codex-heavy builders.
 
-cocanvas turns a PRD plus Codex activity into a product feature graph that shows what changed, why it changed, and whether the change is backed by evidence.
+cocanvas turns Codex activity into an observed product feature graph that shows what was built, what has evidence, and what looks risky.
 
 ## User Problem
 
-Codex can move faster than the user can review. Builders need a PRD-aware surface that highlights partial implementation, unrelated edits, missing tests, risky claims, and verified work.
+Codex can move faster than the user can review. Builders need a calm surface that shows observed feature changes, evidence, risk, and drift without reading every intermediate file edit.
 
 ## Demo Flow
 
-1. Select a repo.
-2. Paste the Password Reset PRD.
-3. Generate the initial feature graph.
-4. Start a Codex task.
-5. Replay Codex events.
-6. Watch feature nodes move through changed, risk, verified, and drift states.
-7. Inspect evidence and suggested actions.
+1. Open the canvas.
+2. Run the demo replay.
+3. Watch graph events create feature, flow, capability, evidence, risk, and cluster nodes.
+4. Watch statuses move through building, implemented, risk, verified, and unlinked.
+5. Use the Codex input panel as the future task entry point.
 
 ## Setup
 
@@ -27,11 +25,13 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+No environment variables are required for the current mock demo.
+
 ## Mock Demo
 
 Click `Run Demo Replay`.
 
-The replay emits plan updates, file changes, test failure, test pass, and an out-of-scope billing edit. The graph updates without any live Codex integration.
+The replay emits append-only graph events. The graph updates without any live Codex integration.
 
 ## Tech Stack
 
@@ -39,22 +39,22 @@ The replay emits plan updates, file changes, test failure, test pass, and an out
 - React
 - TypeScript
 - Tailwind CSS
-- Mock-first Codex event adapter
+- React Flow
+- Mock-first graph event replay
 
-Planned additions: React Flow, Framer Motion, Zustand, zod, chokidar, simple-git, and `codex exec --json`.
+Planned additions: graph event validation, `codex exec --json`, Codex SDK/App Server integration, and an OpenAI observer model.
 
 ## Current Limitations
 
-- PRD parsing is mocked.
-- Repo scanning is mocked.
-- Canvas layout is static.
-- Codex adapters are placeholders except mock replay.
+- The input panel does not start a real Codex task yet.
+- The observer model is not wired yet.
+- The canvas reads graph events, not raw Codex output.
 - State is local and in-memory.
 
 ## Future Work
 
-- Replace static canvas with React Flow.
-- Add structured OpenAI PRD parsing.
-- Normalize real `codex exec --json` events.
-- Add repo watcher and git checkpoint support.
-- Persist graph snapshots as JSON.
+- Normalize real `codex exec --json` output into graph events.
+- Add a Codex SDK or App Server path.
+- Add an OpenAI observer that converts diffs, tests, and logs into graph events.
+- Persist graph events and snapshots.
+- Add validation for `.cocanvas/graph-events.jsonl`.

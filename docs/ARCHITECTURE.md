@@ -1,74 +1,58 @@
 # Architecture
 
-## High-Level Architecture
+## Current Shape
 
-cocanvas is a single full-stack TypeScript app:
-
-- `app/`: Next.js pages and route handlers.
-- `components/`: UI shell, graph, timeline, inspector, PRD, and Codex task panels.
-- `lib/types/`: shared data contracts.
-- `lib/prd/`: PRD parser boundary.
-- `lib/repo/`: repo scan and watcher boundary.
-- `lib/codex/`: event source adapters.
-- `lib/graph/`: graph construction and event update logic.
-- `lib/demo/`: mock PRD, graph, and Codex event sequence.
-
-The current main canvas is event-driven:
+cocanvas is currently a small Next.js app centered on one path:
 
 ```text
-.cocanvas/graph-events.jsonl
+.cocanvas/graph-events.jsonl or mockGraphEvents
   -> readGraphEvents()
   -> reduceGraphEvents()
   -> ObservedGraphState
-  -> canvas + timeline + inspector
+  -> React Flow canvas
 ```
 
-PRD parsing and repository scanning are retained as scaffold code, but they do
-not drive the primary canvas path.
+The canvas does not parse a PRD and does not draw a code dependency graph. It renders an observed feature graph from graph events.
 
-## Event Flow
+## Runtime Pieces
 
-1. User starts a task.
-2. A `CodexEventSource` emits normalized `CodexTimelineEvent` records.
-3. UI appends each event to the timeline.
-4. `updateGraphFromCodexEvent` maps events to features and evidence.
-5. Canvas and inspector rerender from the graph state.
+- `app/page.tsx` renders the app shell.
+- `components/layout/AppShell.tsx` owns local replay state and top-level actions.
+- `components/graph/FeatureCanvas.tsx` renders nodes and edges with React Flow.
+- `components/codex/CodexChatPanel.tsx` is the UI placeholder for future Codex task entry.
+- `lib/types/observedGraph.ts` defines the graph event protocol.
+- `lib/graph/reduceGraphEvents.ts` reduces append-only events into canvas state.
+- `lib/demo/mockGraphEvents.ts` provides the hackathon fallback replay.
 
-## Graph Update Flow
+## API Routes
 
-- `file_change` maps changed paths to feature artifacts by exact path,
-  basename, artifact tokens, and feature tokens.
-- Matched features become `in_progress`.
-- Unmapped file changes create `drift` nodes.
-- Passing test commands mark related features `verified`.
-- Failing commands mark related features `risk`.
-- Command events can infer related features from `featureIds`, paths, command
-  text, title, and detail.
-- Acceptance criteria are updated only when event text overlaps distinctive
-  criterion terms, which avoids marking generic `reset token` criteria as
-  verified too early.
+- `GET /api/graph` reads graph events and returns `{ events, graph }`.
+- `GET /api/events` reads graph events and returns `{ events, timeline }`.
+- `POST /api/demo/replay` returns the scripted mock graph events and reduced graph.
+- `POST /api/graph/reset` returns an empty graph state.
 
-## API Route Contracts
+## Event Strategy
 
-- `POST /api/parse-prd` returns `{ parsed, graph }`.
-- `POST /api/scan-repo` returns `{ repoPath, scannedAt, artifacts }`.
-- `POST /api/codex/start` returns `{ taskId, mode, repoPath, prompt, events, graphAfterReplay }`.
-- `GET /api/events` returns `{ mode, events }`.
+The stable contract is append-only graph events:
 
-The scanner is intentionally lightweight. It walks a bounded number of files,
-ignores build and dependency folders, and classifies artifacts by simple path
-heuristics.
-
-## Adapter Strategy
-
-Every event source implements:
-
-```ts
-startTask(input: { repoPath: string; prompt: string }): AsyncIterable<CodexTimelineEvent>
+```text
+node.upsert
+edge.upsert
+status.update
+evidence.add
+risk.add
 ```
 
-This keeps the UI independent from mock replay, `codex exec --json`, repo watchers, or future Codex App Server integration.
+Any observer can emit these events later: mock replay, `codex exec --json`, Codex SDK, App Server, repo watcher, or an OpenAI Responses-based observer. The UI should only consume reduced graph state.
 
-## Why Mock-First Is Intentional
+## Codex Integration Status
 
-The hackathon demo needs one strong path even if live integration breaks. Mock replay proves the product loop, gives Person A stable UI data, and gives Person B a contract for real event normalization.
+The current app is not connected to live Codex. The input panel is a UI placeholder. The next integration should add a server-side adapter that either:
+
+1. Runs `codex exec --json` and maps JSONL events into graph events.
+2. Uses the Codex SDK/App Server when the team wants cloud or app-level task control.
+3. Uses the OpenAI Responses API for an observer model that converts logs and diffs into graph events.
+
+## Why Mock-First
+
+The demo must work without credentials, network, or a live Codex process. Mock replay proves the product behavior while keeping the integration surface small and replaceable.
