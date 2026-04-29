@@ -1,3 +1,9 @@
+# VIDEO
+
+https://drive.google.com/file/d/1969XOsfROHzdc4GJHbtecgy2mpv5RkH_/view?usp=sharing
+
+
+
 # cocanvas
 
 cocanvas is a live feature canvas for Codex-heavy builders. It turns Codex activity, repository scans, and observer output into an observed product graph that shows what was built, what evidence supports it, and where risk remains.
