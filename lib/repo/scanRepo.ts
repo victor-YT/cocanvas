@@ -5,10 +5,13 @@ export type RepoArtifactKind =
   | "page"
   | "layout"
   | "api"
+  | "app"
   | "component"
   | "service"
   | "database"
-  | "test";
+  | "test"
+  | "style"
+  | "config";
 
 export type RepoArtifact = {
   path: string;
@@ -26,6 +29,20 @@ const ignoredDirectories = new Set([
   "build",
   "node_modules",
   "out",
+  ".turbo",
+  ".vercel",
+]);
+
+const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
+
+const configFiles = new Set([
+  "package.json",
+  "next.config.ts",
+  "next.config.js",
+  "vite.config.ts",
+  "vite.config.js",
+  "tailwind.config.ts",
+  "tailwind.config.js",
 ]);
 
 function toPosixPath(path: string) {
@@ -66,14 +83,27 @@ function artifactKind(path: string): RepoArtifactKind | undefined {
     return "database";
   }
 
+  if (configFiles.has(path)) {
+    return "config";
+  }
+
+  if (path.endsWith(".css") && (path.startsWith("app/") || path.startsWith("styles/"))) {
+    return "style";
+  }
+
   if (
-    path.startsWith("tests/") &&
-    (path.endsWith(".test.ts") || path.endsWith(".spec.ts"))
+    (path.startsWith("tests/") ||
+      path.startsWith("__tests__/") ||
+      path.includes("/__tests__/")) &&
+    (path.endsWith(".test.ts") ||
+      path.endsWith(".test.tsx") ||
+      path.endsWith(".spec.ts") ||
+      path.endsWith(".spec.tsx"))
   ) {
     return "test";
   }
 
-  if (path.startsWith("app/api/") && path.endsWith("/route.ts")) {
+  if (path.startsWith("app/api/") && /\/route\.(ts|tsx)$/.test(path)) {
     return "api";
   }
 
@@ -93,11 +123,27 @@ function artifactKind(path: string): RepoArtifactKind | undefined {
     return "layout";
   }
 
-  if (path.startsWith("components/") && path.endsWith(".tsx")) {
+  const extension = extname(path);
+
+  if (!sourceExtensions.has(extension) || path.endsWith(".d.ts")) {
+    return undefined;
+  }
+
+  if (path.startsWith("app/")) {
+    return "app";
+  }
+
+  if (path.startsWith("components/")) {
     return "component";
   }
 
-  if (path.startsWith("src/") && path.endsWith(".ts") && !path.endsWith(".d.ts")) {
+  if (
+    path.startsWith("src/") ||
+    path.startsWith("lib/") ||
+    path.startsWith("hooks/") ||
+    path.startsWith("stores/") ||
+    path.startsWith("utils/")
+  ) {
     return "service";
   }
 
@@ -126,15 +172,27 @@ function artifactName(path: string, kind: RepoArtifactKind) {
     return `${titleCase(segments.join(" "))} API`;
   }
 
+  if (kind === "app") {
+    return titleCase(path.replace(/^app\//, ""));
+  }
+
   if (kind === "test") {
-    return `${titleCase(basename(path).replace(/\.(test|spec)\.ts$/, ""))} Tests`;
+    return `${titleCase(basename(path).replace(/\.(test|spec)\.tsx?$/, ""))} Tests`;
+  }
+
+  if (kind === "style") {
+    return `${titleCase(basename(path, extname(path)))} Styles`;
+  }
+
+  if (kind === "config") {
+    return `${titleCase(basename(path, extname(path)))} Config`;
   }
 
   return titleCase(basename(path, extname(path)));
 }
 
 function normalizePreview(contents: string) {
-  return contents.replace(/\s+/g, " ").trim().slice(0, 500);
+  return contents;
 }
 
 async function walk(rootPath: string, directory = rootPath): Promise<string[]> {

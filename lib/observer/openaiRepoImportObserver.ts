@@ -41,13 +41,17 @@ Rules:
 - Output only feature hierarchy events: node.upsert and edge.upsert.
 - Use nodeType "feature" for every visible canvas node.
 - Do not create evidence, risk, file, command, or test nodes.
-- Create 3-7 top-level product areas when the repo supports it.
-- Create child features under those product areas.
+- Read the provided source code directly and cover every meaningful product capability.
+- Do not omit features just to keep the graph small.
+- Create as many top-level product areas as needed for the actual repo.
+- Create child features under those product areas, and use grandchild features
+  when a product area has several distinct sub-capabilities.
 - Prefer product language over code language.
 - Do not make one generic "Features" root node.
 - Do not put every service under one parent.
 - Avoid titles ending in Service, Component, Handler, Module, Util, or Route.
-- Keep each top-level product area to about 4-8 child features.
+- Prefer comprehensive coverage over a tiny graph; avoid hiding real features
+  inside a generic "More Utilities" node unless they are truly minor.
 - Use only relatedFiles paths that exist in the provided artifact list.
 - If uncertain, group small implementation details into a product-like utility area.
 - Edges must be contains only: parent feature -> child feature.
@@ -60,7 +64,7 @@ const graphEventSchema = {
   properties: {
     events: {
       type: "array",
-      maxItems: 80,
+      maxItems: 400,
       items: {
         anyOf: [
           {
@@ -298,7 +302,7 @@ export async function observeRepoImportWithOpenAI(
           contentPreview: artifact.contentPreview,
         })),
       }),
-      max_output_tokens: 7000,
+      max_output_tokens: 24000,
       text: {
         format: {
           type: "json_schema",

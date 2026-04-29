@@ -27,7 +27,7 @@ export type InferredFeatureGraph = {
   productAreaCount: number;
 };
 
-const maxChildrenPerGroup = 8;
+const maxChildrenPerGroup = 50;
 
 const productAreas: ProductAreaDefinition[] = [
   {
@@ -257,6 +257,10 @@ function areaScore(artifact: RepoArtifact, area: ProductAreaDefinition) {
     score += area.id === "data_backend" ? 3 : 0;
   }
 
+  if (artifact.kind === "config" || artifact.kind === "style") {
+    score += area.id === "ui_theme" || area.id === "utilities_error_handling" ? 1 : 0;
+  }
+
   return score;
 }
 
@@ -325,10 +329,13 @@ function summaryForKind(kind: RepoArtifactKind) {
     page: "Imported from a Next.js page file.",
     layout: "Imported from a Next.js layout file.",
     api: "Imported from a Next.js route handler.",
+    app: "Imported from an app source file.",
     component: "Imported from a React component.",
     service: "Imported from a TypeScript service module.",
     database: "Imported from the Prisma schema.",
     test: "Imported from test files and attached as related context.",
+    style: "Imported from a stylesheet.",
+    config: "Imported from project configuration.",
   };
 
   return summaries[kind];
@@ -339,9 +346,12 @@ function priorityForArtifact(artifact: RepoArtifact) {
     page: 100,
     database: 92,
     api: 88,
+    app: 82,
     layout: 76,
     component: 68,
     service: 62,
+    style: 40,
+    config: 20,
     test: 0,
   };
 
