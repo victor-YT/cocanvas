@@ -5,11 +5,7 @@ import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphEvent } from "@/lib/types/observedGraph";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
-import {
-  CodexChatPanel,
-  type CodexFunctionId,
-  type CodexRunOptions,
-} from "@/components/codex/CodexChatPanel";
+import { CodexChatPanel, type CodexRunOptions } from "@/components/codex/CodexChatPanel";
 import {
   CodexRunStatusBar,
   type CodexRunStatus,
@@ -33,37 +29,6 @@ function replayDelayForEvent(event: (typeof mockGraphEvents)[number]) {
 
   return updateReplayDelayMs;
 }
-
-const functionPrompts: Record<CodexFunctionId, string> = {
-  plan: "Plan the next implementation steps.",
-  implement: "Implement this feature end-to-end.",
-  edit: "Edit the files needed for this feature only.",
-  test: "Generate and run the relevant tests.",
-  fix: "Fix the latest failing or risky behavior.",
-  review: "Review the graph evidence and summarize risk.",
-  explain: "Explain this feature in product language.",
-  scope: "Check whether the work stayed inside the current run scope.",
-};
-
-const quickActionPhase: Partial<
-  Record<CodexFunctionId, { status: CodexRunStatus; phase: string; message: string }>
-> = {
-  plan: {
-    status: "working",
-    phase: "Planning",
-    message: "Asking Codex for the next implementation plan.",
-  },
-  test: {
-    status: "testing",
-    phase: "Running tests",
-    message: "Asking Codex to generate and run the relevant tests.",
-  },
-  review: {
-    status: "working",
-    phase: "Reviewing changes",
-    message: "Asking Codex to inspect evidence and risk.",
-  },
-};
 
 function formatElapsed(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -130,10 +95,6 @@ export function AppShell() {
   const [runStartedAt, setRunStartedAt] = useState<number>();
   const [elapsed, setElapsed] = useState("0s");
 
-  const selectedNode = graph.nodes.find(
-    (node) => node.id === graph.selectedNodeId,
-  );
-
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setMounted(true), 0);
 
@@ -197,10 +158,6 @@ export function AppShell() {
     setRunStartedAt(undefined);
   }
 
-  function modelForCodex(options: CodexRunOptions) {
-    return options.model === "auto" ? undefined : options.model;
-  }
-
   async function startCodexTask(
     prompt: string,
     options: CodexRunOptions,
@@ -231,7 +188,8 @@ export function AppShell() {
         body: JSON.stringify({
           repoPath,
           prompt,
-          model: modelForCodex(options),
+          model: options.model,
+          effort: options.effort,
         }),
       });
       const data = (await response.json()) as {
@@ -266,13 +224,6 @@ export function AppShell() {
       phase: "Working",
       message: "Running your request in the selected repo.",
     });
-  }
-
-  function runCodexFunction(id: CodexFunctionId, options: CodexRunOptions) {
-    const target = selectedNode?.title ?? "the observed graph";
-    const prompt = `${functionPrompts[id]} Target: ${target}.`;
-
-    void startCodexTask(prompt, options, quickActionPhase[id]);
   }
 
   async function selectRepo() {
@@ -362,7 +313,6 @@ export function AppShell() {
               isRunning={isReplaying || isCodexRunning}
               onDraftChange={setChatDraft}
               onSubmit={submitCodexChat}
-              onRunFunction={runCodexFunction}
             />
           }
           runStatusBar={

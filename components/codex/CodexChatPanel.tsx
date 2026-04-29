@@ -1,23 +1,18 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
-
-export type CodexFunctionId =
-  | "plan"
-  | "implement"
-  | "edit"
-  | "test"
-  | "fix"
-  | "review"
-  | "explain"
-  | "scope";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  CODEX_MODEL_OPTIONS,
+  CODEX_REASONING_EFFORT_OPTIONS,
+  DEFAULT_CODEX_MODEL,
+  DEFAULT_CODEX_REASONING_EFFORT,
+  type CodexModel,
+  type CodexReasoningEffort,
+} from "@/lib/codex/options";
 
 export type CodexRunOptions = {
-  model: "auto" | "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini";
-  speed: "low" | "medium" | "high" | "extra-high";
-  usage: "auto" | "conserve" | "max";
-  access: "ask" | "workspace" | "full";
-  parallel: boolean;
+  model: CodexModel;
+  effort: CodexReasoningEffort;
 };
 
 type CodexChatPanelProps = {
@@ -25,29 +20,16 @@ type CodexChatPanelProps = {
   isRunning: boolean;
   onDraftChange: (value: string) => void;
   onSubmit: (options: CodexRunOptions) => void;
-  onRunFunction: (id: CodexFunctionId, options: CodexRunOptions) => void;
+};
+
+type PickerOption<T extends string> = {
+  value: T;
+  label: string;
 };
 
 const defaultOptions: CodexRunOptions = {
-  model: "auto",
-  speed: "high",
-  usage: "auto",
-  access: "workspace",
-  parallel: true,
-};
-
-const modelLabels: Record<CodexRunOptions["model"], string> = {
-  auto: "Auto",
-  "gpt-5.5": "GPT-5.5",
-  "gpt-5.4": "GPT-5.4",
-  "gpt-5.4-mini": "GPT-5.4 Mini",
-};
-
-const speedLabels: Record<CodexRunOptions["speed"], string> = {
-  low: "Careful",
-  medium: "Balanced",
-  high: "Fast",
-  "extra-high": "Max",
+  model: DEFAULT_CODEX_MODEL,
+  effort: DEFAULT_CODEX_REASONING_EFFORT,
 };
 
 function Icon({
@@ -90,6 +72,14 @@ function BoltIcon() {
   );
 }
 
+function ChevronIcon() {
+  return (
+    <Icon className="h-3.5 w-3.5">
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  );
+}
+
 function SpinnerIcon() {
   return (
     <Icon className="h-4 w-4 animate-spin">
@@ -98,12 +88,98 @@ function SpinnerIcon() {
   );
 }
 
+function UpwardPicker<T extends string>({
+  ariaLabel,
+  disabled,
+  icon,
+  options,
+  value,
+  onChange,
+}: {
+  ariaLabel: string;
+  disabled: boolean;
+  icon?: ReactNode;
+  options: readonly PickerOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {icon}
+        <span className="whitespace-nowrap">{selected.label}</span>
+        <span className="rotate-180 text-zinc-400">
+          <ChevronIcon />
+        </span>
+      </button>
+
+      {open ? (
+        <div className="absolute bottom-full right-0 z-50 mb-2 w-max min-w-full rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-[0_14px_36px_rgba(24,24,27,0.14)]">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className={`flex h-8 w-full cursor-pointer items-center justify-start rounded-xl px-3 text-left text-xs font-bold transition ${
+                option.value === value
+                  ? "bg-zinc-950 text-white"
+                  : "text-zinc-700 hover:bg-zinc-100"
+              }`}
+            >
+              <span className="whitespace-nowrap">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function CodexChatPanel({
   draft,
   isRunning,
   onDraftChange,
   onSubmit,
-  onRunFunction,
 }: CodexChatPanelProps) {
   const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
   const canSubmit = draft.trim().length > 0 && !isRunning;
@@ -116,14 +192,6 @@ export function CodexChatPanel({
     }
 
     onSubmit(options);
-  }
-
-  function runQuickAction(id: CodexFunctionId) {
-    if (isRunning) {
-      return;
-    }
-
-    onRunFunction(id, options);
   }
 
   return (
@@ -140,67 +208,40 @@ export function CodexChatPanel({
           placeholder="Ask Codex to build or change this repo."
         />
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {(["plan", "test", "review"] as const).map((action) => (
-              <button
-                key={action}
-                type="button"
-                disabled={isRunning}
-                onClick={() => runQuickAction(action)}
-                className="cursor-pointer rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold capitalize text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {action}
-              </button>
-            ))}
-          </div>
-
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+          {/* Quick actions are hidden until they map to first-class run modes. */}
           <div className="flex shrink-0 items-center gap-2">
-            <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100">
-              <BoltIcon />
-              <select
-                aria-label="Run speed"
-                disabled={isRunning}
-                className="cursor-pointer bg-transparent text-xs font-bold outline-none disabled:cursor-not-allowed"
-                value={options.speed}
-                onChange={(event) => {
-                  setOptions((current) => ({
-                    ...current,
-                    speed: event.target.value as CodexRunOptions["speed"],
-                  }));
-                }}
-              >
-                {Object.entries(speedLabels).map(([speed, label]) => (
-                  <option key={speed} value={speed}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <select
-              aria-label="Codex model"
+            <UpwardPicker
+              ariaLabel="Reasoning effort"
               disabled={isRunning}
-              className="h-9 cursor-pointer rounded-full border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-bold text-zinc-700 outline-none transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-              value={options.model}
-              onChange={(event) => {
+              icon={<BoltIcon />}
+              options={CODEX_REASONING_EFFORT_OPTIONS}
+              value={options.effort}
+              onChange={(effort) => {
                 setOptions((current) => ({
                   ...current,
-                  model: event.target.value as CodexRunOptions["model"],
+                  effort,
                 }));
               }}
-            >
-              {Object.entries(modelLabels).map(([model, label]) => (
-                <option key={model} value={model}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            />
+
+            <UpwardPicker
+              ariaLabel="Codex model"
+              disabled={isRunning}
+              options={CODEX_MODEL_OPTIONS}
+              value={options.model}
+              onChange={(model) => {
+                setOptions((current) => ({
+                  ...current,
+                  model,
+                }));
+              }}
+            />
 
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-zinc-950 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-zinc-950 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               {isRunning ? <SpinnerIcon /> : <ArrowUpIcon />}
               {isRunning ? "Running" : "Run"}

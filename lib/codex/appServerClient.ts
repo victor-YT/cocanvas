@@ -1,6 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import { observeCodexRunWithOpenAI } from "@/lib/observer/openaiGraphObserver";
+import {
+  DEFAULT_CODEX_MODEL,
+  DEFAULT_CODEX_REASONING_EFFORT,
+  type CodexReasoningEffort,
+} from "@/lib/codex/options";
 import type { GraphEvent } from "@/lib/types/observedGraph";
 
 type JsonRpcMessage = {
@@ -18,6 +23,7 @@ export type CodexAppServerRunInput = {
   repoPath: string;
   prompt: string;
   model?: string;
+  effort?: CodexReasoningEffort;
 };
 
 export type CodexAppServerRunResult = {
@@ -248,7 +254,13 @@ export class CodexAppServerClient {
   async run(input: CodexAppServerRunInput): Promise<CodexAppServerRunResult> {
     const graphEvents: GraphEvent[] = [];
     const runId = `codex_run_${Date.now()}`;
-    const model = input.model || process.env.CODEX_APP_SERVER_MODEL || "gpt-5.4";
+    const model = input.model || process.env.CODEX_APP_SERVER_MODEL || DEFAULT_CODEX_MODEL;
+    const effort =
+      input.effort ||
+      (process.env.CODEX_APP_SERVER_REASONING_EFFORT as
+        | CodexReasoningEffort
+        | undefined) ||
+      DEFAULT_CODEX_REASONING_EFFORT;
     let threadId: string | undefined;
     let turnId: string | undefined;
     let assistantText = "";
@@ -346,6 +358,8 @@ export class CodexAppServerClient {
       await this.request("turn/start", {
         threadId,
         cwd: input.repoPath,
+        model,
+        effort,
         input: [{ type: "text", text: input.prompt, text_elements: [] }],
       });
 
