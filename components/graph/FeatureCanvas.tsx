@@ -231,7 +231,6 @@ export function FeatureCanvas({
     origin: CanvasPoint;
   }>();
   const positions = useMemo(() => buildPositions(graph.nodes), [graph.nodes]);
-  const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId);
 
   function zoomTo(nextZoom: number) {
     setViewport((current) => ({
@@ -326,18 +325,6 @@ export function FeatureCanvas({
         </button>
       </div>
 
-      {selectedNode ? (
-        <div className="absolute bottom-4 left-4 z-20 hidden max-w-sm rounded-xl border border-zinc-200 bg-white/95 p-3 shadow-sm xl:block">
-          <div className="text-xs font-medium uppercase text-zinc-500">Selected</div>
-          <div className="mt-1 text-sm font-semibold text-zinc-900">
-            {selectedNode.title}
-          </div>
-          <p className="mt-1 text-xs leading-5 text-zinc-500">
-            {selectedNode.summary ?? nodeTypeLabel[selectedNode.nodeType]}
-          </p>
-        </div>
-      ) : null}
-
       {chatPanel ? (
         <div
           className="absolute bottom-5 left-5 right-5 z-30 flex justify-center"
@@ -347,16 +334,7 @@ export function FeatureCanvas({
         </div>
       ) : null}
 
-      {graph.nodes.length === 0 ? (
-        <div className="relative z-10 grid h-full min-h-[640px] place-items-center p-8 text-center">
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/90 p-8 shadow-sm">
-            <p className="text-sm font-semibold text-zinc-900">Blank canvas</p>
-            <p className="mt-1 max-w-sm text-sm text-zinc-500">
-              Run Demo Replay to append graph events and grow the observed feature map.
-            </p>
-          </div>
-        </div>
-      ) : (
+      {graph.nodes.length > 0 ? (
         <div
           className={`relative z-10 h-full min-h-[calc(100vh-24px)] touch-none overflow-hidden ${
             panStart ? "cursor-grabbing" : "cursor-grab"
@@ -422,7 +400,7 @@ export function FeatureCanvas({
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
