@@ -38,39 +38,32 @@ type CanvasNodeData = {
 
 type CanvasNode = Node<CanvasNodeData, "observed">;
 
-const statusTone: Record<ObservedNodeStatus, { card: string; dot: string; label: string }> = {
+const statusTone: Record<ObservedNodeStatus, { dot: string; label: string }> = {
   planned: {
-    card: "border-zinc-300 bg-white text-zinc-900",
     dot: "bg-zinc-300",
     label: "Planned",
   },
   building: {
-    card: "border-amber-400 bg-white text-zinc-900",
-    dot: "bg-amber-400",
+    dot: "bg-emerald-400",
     label: "Building",
   },
   implemented: {
-    card: "border-blue-400 bg-white text-zinc-900",
     dot: "bg-blue-400",
     label: "Implemented",
   },
   needs_evidence: {
-    card: "border-zinc-400 bg-white text-zinc-900",
     dot: "bg-zinc-400",
     label: "Needs evidence",
   },
   verified: {
-    card: "border-emerald-400 bg-white text-zinc-900",
     dot: "bg-emerald-400",
     label: "Verified",
   },
   risk: {
-    card: "border-rose-400 bg-white text-zinc-900",
     dot: "bg-rose-400",
     label: "Risk",
   },
   unlinked: {
-    card: "border-violet-400 bg-white text-zinc-900",
     dot: "bg-violet-400",
     label: "Unlinked",
   },
@@ -271,14 +264,20 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div
-      className={`cocanvas-node w-[310px] rounded-[18px] border-2 px-5 py-[18px] text-left shadow-[0_12px_28px_rgba(24,24,27,0.08)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(24,24,27,0.12)] ${tone.card} ${
+      className={`cocanvas-node relative w-[310px] rounded-[18px] border border-zinc-200 bg-white px-5 py-[18px] text-left text-zinc-900 shadow-[0_12px_28px_rgba(24,24,27,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_16px_34px_rgba(24,24,27,0.12)] ${
         selected ? "ring-2 ring-zinc-950 ring-offset-2" : ""
       }`}
       role="button"
       tabIndex={0}
     >
+      {node.status === "building" ? (
+        <span
+          aria-label="Working"
+          className="cocanvas-working-dot absolute right-4 top-4 h-3.5 w-3.5 rounded-full bg-emerald-400"
+        />
+      ) : null}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 pr-6">
           <div className="truncate text-[19px] font-semibold leading-7 tracking-normal">
             {node.title}
           </div>
@@ -286,7 +285,6 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
             {nodeTypeLabel[node.nodeType]}
           </div>
         </div>
-        <span className={`mt-2 h-3.5 w-3.5 shrink-0 rounded-full ${tone.dot}`} />
       </div>
       <div className="mt-4 inline-flex rounded-full bg-zinc-100 px-3 py-1 text-[13px] font-semibold text-zinc-700">
         {tone.label}
