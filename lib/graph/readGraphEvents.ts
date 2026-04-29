@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { GraphEvent } from "@/lib/types/observedGraph";
-import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 
 const GRAPH_EVENTS_PATH = ".cocanvas/graph-events.jsonl";
 
@@ -43,8 +42,8 @@ export async function readGraphEvents(): Promise<GraphEvent[]> {
       .map(parseGraphEventLine)
       .filter((event): event is GraphEvent => event !== undefined);
 
-    return events.length > 0 ? events : mockGraphEvents;
+    return events;
   } catch {
-    return mockGraphEvents;
+    return [];
   }
 }

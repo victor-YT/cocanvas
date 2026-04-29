@@ -4,6 +4,7 @@ export type CodexRunStatus = "idle" | "working" | "testing" | "completed" | "fai
 
 type CodexRunStatusBarProps = {
   status: CodexRunStatus;
+  title?: string;
   phase?: string;
   message?: string;
   elapsed?: string;
@@ -80,6 +81,7 @@ function changeSummary(filesChanged?: number, additions?: number, deletions?: nu
 
 export function CodexRunStatusBar({
   status,
+  title,
   phase,
   message,
   elapsed,
@@ -115,7 +117,7 @@ export function CodexRunStatusBar({
 
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2 text-[13px] font-bold">
-            <span className="shrink-0">{statusTitle[status]}</span>
+            <span className="shrink-0">{title ?? statusTitle[status]}</span>
             {elapsed && active ? (
               <span className="shrink-0 text-xs font-bold text-zinc-400">
                 {elapsed}
@@ -123,7 +125,7 @@ export function CodexRunStatusBar({
             ) : null}
           </div>
           <div className="truncate text-[11px] font-bold text-zinc-500">
-            {phase ? `${phase} - ` : ""}
+            {phase ? `${phase} · ` : ""}
             {message || summary || "Waiting for a task."}
           </div>
         </div>

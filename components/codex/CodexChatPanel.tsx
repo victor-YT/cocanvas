@@ -9,6 +9,7 @@ import {
   type CodexModel,
   type CodexReasoningEffort,
 } from "@/lib/codex/options";
+import type { ObservedGraphNode } from "@/lib/types/observedGraph";
 
 export type CodexRunOptions = {
   model: CodexModel;
@@ -18,7 +19,9 @@ export type CodexRunOptions = {
 type CodexChatPanelProps = {
   draft: string;
   isRunning: boolean;
+  selectedTarget?: ObservedGraphNode;
   onDraftChange: (value: string) => void;
+  onClearTarget: () => void;
   onSubmit: (options: CodexRunOptions) => void;
 };
 
@@ -72,15 +75,6 @@ function BoltIcon() {
   );
 }
 
-function RepoContextIcon() {
-  return (
-    <Icon className="h-4 w-4">
-      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v6A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5Z" />
-      <path d="m10 12 2 2 3-4" />
-    </Icon>
-  );
-}
-
 function ChevronIcon() {
   return (
     <Icon className="h-3.5 w-3.5">
@@ -93,6 +87,15 @@ function SpinnerIcon() {
   return (
     <Icon className="h-4 w-4 animate-spin">
       <path d="M21 12a9 9 0 1 1-9-9" />
+    </Icon>
+  );
+}
+
+function XIcon() {
+  return (
+    <Icon className="h-3.5 w-3.5">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </Icon>
   );
 }
@@ -150,7 +153,7 @@ function UpwardPicker<T extends string>({
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-xs font-bold text-zinc-700 shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full bg-zinc-100/70 px-3 text-xs font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-600 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {icon}
         <span className="whitespace-nowrap">{selected.label}</span>
@@ -187,7 +190,9 @@ function UpwardPicker<T extends string>({
 export function CodexChatPanel({
   draft,
   isRunning,
+  selectedTarget,
   onDraftChange,
+  onClearTarget,
   onSubmit,
 }: CodexChatPanelProps) {
   const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
@@ -221,6 +226,23 @@ export function CodexChatPanel({
         onSubmit={handleSubmit}
         className="rounded-[30px] border border-black/10 bg-white/95 px-4 py-3 shadow-[0_18px_52px_rgba(24,24,27,0.13)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-300 focus-within:border-black/15 focus-within:shadow-[0_22px_60px_rgba(24,24,27,0.16)]"
       >
+        {selectedTarget ? (
+          <div className="mb-2 flex">
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800">
+              <span className="truncate">@{selectedTarget.title}</span>
+              <button
+                type="button"
+                aria-label="Clear target feature"
+                disabled={isRunning}
+                onClick={onClearTarget}
+                className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <XIcon />
+              </button>
+            </span>
+          </div>
+        ) : null}
+
         <textarea
           ref={textareaRef}
           value={draft}
@@ -231,14 +253,7 @@ export function CodexChatPanel({
           placeholder="Ask Codex to build or change this repo."
         />
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="inline-flex h-10 items-center gap-2 rounded-full border border-black/10 bg-white px-3 text-xs font-bold text-zinc-600 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
-              <RepoContextIcon />
-              Repo
-            </span>
-          </div>
-
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
           {/* Quick actions are hidden until they map to first-class run modes. */}
           <div className="flex shrink-0 items-center gap-2">
             <UpwardPicker

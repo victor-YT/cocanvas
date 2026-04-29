@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FolderGit2 } from "lucide-react";
 import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
-import type { GraphEvent } from "@/lib/types/observedGraph";
+import type { GraphEvent, ObservedGraphNode } from "@/lib/types/observedGraph";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
 import { CodexChatPanel, type CodexRunOptions } from "@/components/codex/CodexChatPanel";
 import {
@@ -14,6 +14,11 @@ import {
 
 const nodeReplayDelayMs = 1000;
 const updateReplayDelayMs = 180;
+const demoProjectLabel = "cocanvas / demo-task-board";
+const topPillClass =
+  "h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100";
+const primaryTopPillClass =
+  "h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-800 hover:shadow-md disabled:cursor-not-allowed disabled:bg-zinc-400 disabled:hover:scale-100";
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,10 +83,38 @@ function replayStatusForEvent(event: (typeof mockGraphEvents)[number]) {
   };
 }
 
+function promptForTarget(userPrompt: string, target?: ObservedGraphNode) {
+  if (!target) {
+    return userPrompt;
+  }
+
+  const relatedFiles =
+    target.relatedFiles.length > 0
+      ? target.relatedFiles.map((file) => `- ${file}`).join("\n")
+      : "- none observed";
+  const status =
+    target.risks.length > 0 || target.status === "risk" ? "risk" : target.status;
+
+  return `Target feature: ${target.title}
+
+The user wants to modify this feature:
+${userPrompt}
+
+Relevant context:
+- status: ${status}
+- evidence count: ${target.evidence.length}
+- risk count: ${target.risks.length}
+- related files:
+${relatedFiles}
+
+Please focus changes on this feature unless necessary.`;
+}
+
 export function AppShell() {
   const {
     graph,
     selectNode,
+    clearSelectedNode,
     applyGraphEvent,
     resetCanvas,
   } = useGraphStore([]);
@@ -89,14 +122,17 @@ export function AppShell() {
   const [isCodexRunning, setIsCodexRunning] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [repoPath, setRepoPath] = useState("Loading repo...");
+  const [repoPath, setRepoPath] = useState("");
+  const [canvasMode, setCanvasMode] = useState<"real" | "demo">("real");
+  const [targetNodeId, setTargetNodeId] = useState<string>();
   const [chatDraft, setChatDraft] = useState("");
   const [runStatus, setRunStatus] = useState<CodexRunStatus>("idle");
-  const [runPhase, setRunPhase] = useState("Ready");
+  const [runPhase, setRunPhase] = useState<string | undefined>("Ready");
   const [runMessage, setRunMessage] = useState("Choose a repo, then ask Codex what to build.");
   const [runStartedAt, setRunStartedAt] = useState<number>();
   const [elapsed, setElapsed] = useState("0s");
   const isBusy = isReplaying || isCodexRunning || isImporting;
+  const selectedTarget = graph.nodes.find((node) => node.id === targetNodeId);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setMounted(true), 0);
@@ -134,10 +170,13 @@ export function AppShell() {
       return;
     }
 
+    setCanvasMode("demo");
+    setTargetNodeId(undefined);
+    clearSelectedNode();
     setIsReplaying(true);
     setRunStatus("working");
-    setRunPhase("Demo replay");
-    setRunMessage("Appending observed feature events.");
+    setRunPhase(undefined);
+    setRunMessage("Mock feature events only.");
     setRunStartedAt(Date.now());
     setElapsed("0s");
     resetCanvas();
@@ -152,21 +191,36 @@ export function AppShell() {
 
     setIsReplaying(false);
     setRunStatus("completed");
-    setRunPhase("Completed");
-    setRunMessage(`${mockGraphEvents.length} graph events applied.`);
+    setRunPhase(undefined);
+    setRunMessage("Mock replay only.");
     setRunStartedAt(undefined);
   }
 
-  function handleResetCanvas() {
+  async function handleResetCanvas() {
     if (isBusy) {
       return;
     }
 
+    const shouldClearPersistedGraph = canvasMode === "real" && Boolean(repoPath);
+
     resetCanvas();
+    setTargetNodeId(undefined);
+    clearSelectedNode();
+    setCanvasMode("real");
     setRunStatus("idle");
     setRunPhase("Ready");
     setRunMessage("Choose a repo, then ask Codex what to build.");
     setRunStartedAt(undefined);
+
+    if (shouldClearPersistedGraph) {
+      await fetch("/api/graph/reset", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ repoPath }),
+      }).catch((error) => console.error(error));
+    }
   }
 
   async function startCodexTask(
@@ -186,10 +240,24 @@ export function AppShell() {
       return;
     }
 
+    if (!repoPath) {
+      setRunStatus("failed");
+      setRunPhase("No project selected");
+      setRunMessage("Choose a repository before running Codex.");
+      return;
+    }
+
+    const finalPrompt = promptForTarget(prompt, selectedTarget);
+
+    setCanvasMode("real");
     setIsCodexRunning(true);
     setRunStatus(runIntent?.status ?? "working");
     setRunPhase(runIntent?.phase ?? "Working");
-    setRunMessage(runIntent?.message ?? "Sending the task to Codex App Server.");
+    setRunMessage(
+      selectedTarget
+        ? `Codex working on @${selectedTarget.title}`
+        : runIntent?.message ?? "Sending the task to Codex App Server.",
+    );
     setRunStartedAt(Date.now());
     setElapsed("0s");
     setChatDraft("");
@@ -202,7 +270,7 @@ export function AppShell() {
         },
         body: JSON.stringify({
           repoPath,
-          prompt,
+          prompt: finalPrompt,
           model: options.model,
           effort: options.effort,
         }),
@@ -237,7 +305,9 @@ export function AppShell() {
     void startCodexTask(prompt, options, {
       status: "working",
       phase: "Working",
-      message: "Running your request in the selected repo.",
+      message: selectedTarget
+        ? `Codex working on @${selectedTarget.title}`
+        : "Running your request in the selected repo.",
     });
   }
 
@@ -246,6 +316,16 @@ export function AppShell() {
       return;
     }
 
+    if (!repoPath) {
+      setRunStatus("failed");
+      setRunPhase("No project selected");
+      setRunMessage("Choose a repository before importing.");
+      return;
+    }
+
+    setCanvasMode("real");
+    setTargetNodeId(undefined);
+    clearSelectedNode();
     setIsImporting(true);
     setRunStatus("working");
     setRunPhase("Importing repo");
@@ -306,6 +386,9 @@ export function AppShell() {
 
       setRepoPath(data.repoPath);
       resetCanvas();
+      setCanvasMode("real");
+      setTargetNodeId(undefined);
+      clearSelectedNode();
       setRunStatus("idle");
       setRunPhase("Ready");
       setRunMessage("Repository selected. Ask Codex what to build.");
@@ -320,6 +403,23 @@ export function AppShell() {
     const name = parts.at(-1);
 
     return name || path;
+  }
+
+  function projectLabel() {
+    if (canvasMode === "demo") {
+      return demoProjectLabel;
+    }
+
+    if (!repoPath) {
+      return "cocanvas / no project selected";
+    }
+
+    return `cocanvas / ${projectName(repoPath)}`;
+  }
+
+  function handleSelectNode(nodeId: string) {
+    selectNode(nodeId);
+    setTargetNodeId(nodeId);
   }
 
   if (!mounted) {
@@ -338,18 +438,18 @@ export function AppShell() {
         <FeatureCanvas
           graph={graph}
           selectedNodeId={graph.selectedNodeId}
-          onSelectNode={selectNode}
+          onSelectNode={handleSelectNode}
           topControls={
             <>
               <button
                 type="button"
                 onClick={selectRepo}
                 title={repoPath}
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-4 text-sm font-bold shadow-sm transition hover:bg-zinc-50"
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-4 text-sm font-bold shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-50 hover:shadow-md"
               >
                 <FolderGit2 className="h-4 w-4 text-zinc-600" strokeWidth={2.2} />
-                <span className="max-w-[180px] truncate text-zinc-900">
-                  {projectName(repoPath)}
+                <span className="max-w-[220px] truncate text-zinc-900">
+                  {projectLabel()}
                 </span>
               </button>
             </>
@@ -360,7 +460,7 @@ export function AppShell() {
                 type="button"
                 disabled={isBusy}
                 onClick={importExistingRepo}
-                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className={topPillClass}
               >
                 {isImporting ? "Importing" : "Import Existing Repo"}
               </button>
@@ -368,15 +468,15 @@ export function AppShell() {
                 type="button"
                 disabled={isBusy}
                 onClick={runDemoReplay}
-                className="h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                className={primaryTopPillClass}
               >
-                {isReplaying ? "Replaying" : "Run Demo"}
+                {isReplaying ? "Replaying" : "Run Demo Replay"}
               </button>
               <button
                 type="button"
                 disabled={isBusy}
                 onClick={handleResetCanvas}
-                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className={topPillClass}
               >
                 Reset Canvas
               </button>
@@ -386,13 +486,22 @@ export function AppShell() {
             <CodexChatPanel
               draft={chatDraft}
               isRunning={isBusy}
+              selectedTarget={selectedTarget}
               onDraftChange={setChatDraft}
+              onClearTarget={() => setTargetNodeId(undefined)}
               onSubmit={submitCodexChat}
             />
           }
           runStatusBar={
             <CodexRunStatusBar
               status={runStatus}
+              title={
+                isReplaying
+                  ? "Running demo replay"
+                  : canvasMode === "demo" && runStatus === "completed"
+                    ? `Demo completed · ${mockGraphEvents.length} graph events applied`
+                    : undefined
+              }
               phase={runPhase}
               message={runMessage}
               elapsed={elapsed}

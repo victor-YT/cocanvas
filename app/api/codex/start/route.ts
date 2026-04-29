@@ -6,7 +6,10 @@ import {
   isCodexModel,
   isCodexReasoningEffort,
 } from "@/lib/codex/options";
-import { appendGraphEvents } from "@/lib/graph/writeGraphEvents";
+import {
+  appendGraphEvents,
+  appendRawEvents,
+} from "@/lib/graph/writeGraphEvents";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -58,10 +61,18 @@ export async function POST(request: Request) {
       effort: requestedEffort,
     });
     let persistedGraphEvents = false;
+    let persistedRawEvents = false;
 
     try {
       await appendGraphEvents(repoPath, result.graphEvents);
       persistedGraphEvents = true;
+    } catch (error) {
+      console.error(error);
+    }
+
+    try {
+      await appendRawEvents(repoPath, result.rawEvents);
+      persistedRawEvents = true;
     } catch (error) {
       console.error(error);
     }
@@ -71,6 +82,7 @@ export async function POST(request: Request) {
       observerMode:
         result.observerGraphEvents.length > 0 ? "openai-responses" : "fallback",
       persistedGraphEvents,
+      persistedRawEvents,
       ...result,
     });
   } catch (error) {
