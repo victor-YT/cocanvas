@@ -1,46 +1,99 @@
 # cocanvas
 
-Live observed feature canvas for Codex-heavy builders.
+cocanvas is a live feature canvas for Codex-heavy builders. It turns Codex activity, repository scans, and observer output into an observed product graph that shows what was built, what evidence supports it, and where risk remains.
 
-cocanvas turns Codex activity into an observed product feature graph that shows what was built, what has evidence, and what looks risky.
+## Why It Exists
 
-## User Problem
+Codex can move faster than a user can review. cocanvas gives builders a calmer product-level audit trail so they can understand feature changes without reading every intermediate file edit.
 
-Codex can move faster than the user can review. Builders need a calm surface that shows observed feature changes, evidence, risk, and drift without reading every intermediate file edit.
+The core idea is simple: Codex writes code in files, but builders reason about product features. cocanvas connects file-level activity back to feature-level intent.
 
-## Demo Flow
+## What It Does
 
-1. Open the canvas.
-2. Run the demo replay.
-3. Watch graph events create feature, flow, capability, evidence, risk, and cluster nodes.
-4. Watch statuses move through building, implemented, risk, verified, and unlinked.
-5. Use the Codex input panel to start a real Codex App Server task.
+- Renders an observed feature graph with React Flow.
+- Tracks feature, flow, capability, evidence, risk, and cluster nodes.
+- Shows status changes such as building, implemented, verified, risk, and unlinked.
+- Replays mock graph events for demos without credentials or network access.
+- Imports a selected repository into a saved `.cocanvas/graph-events.jsonl` feature map.
+- Provides a Codex input panel for live App Server runs and observer-based graph updates.
 
-## Setup
+## Getting Started
+
+Install dependencies:
 
 ```bash
 npm install
+```
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-Copy `.env.example` to `.env` and set `OPENAI_API_KEY` for live Codex and observer runs.
+For live Codex and OpenAI observer runs, copy `.env.example` to `.env` and set:
 
-## Mock Demo
+```bash
+OPENAI_API_KEY=your_api_key_here
+```
 
-Click `Run Demo Replay`.
+## Demo Flow
 
-The replay emits append-only graph events. The graph updates without any live Codex integration.
+1. Open the app.
+2. Click `Run Demo Replay`.
+3. Watch graph events create and connect product features.
+4. Inspect evidence, risk, and status changes as they appear.
+5. Select a real repo and ask Codex to perform a task from the input panel.
 
-## Live Codex Mode
+## How It Works
 
-The Codex input panel calls `/api/codex/start`, starts `codex app-server`,
-authenticates with `OPENAI_API_KEY`, and runs the task in the selected repo.
-After Codex completes, cocanvas sends the raw Codex events to an OpenAI
-Responses observer model and converts the result into the same graph event
-protocol used by the mock replay. Returned graph events are also appended to
-`.cocanvas/graph-events.jsonl` in the selected repo.
+cocanvas uses an append-only graph event protocol:
+
+```text
+node.upsert
+edge.upsert
+status.update
+evidence.add
+risk.add
+```
+
+Those events are reduced into an observed graph state and rendered on the canvas. The same protocol can be produced by mock replay, repository import, Codex App Server output, or an OpenAI Responses observer.
+
+Current runtime path:
+
+```text
+.cocanvas/graph-events.jsonl or mockGraphEvents
+  -> readGraphEvents()
+  -> reduceGraphEvents()
+  -> ObservedGraphState
+  -> React Flow canvas
+```
+
+## Project Structure
+
+```text
+app/                         Next.js app routes and API routes
+components/layout/           Top-level app shell
+components/graph/            Feature canvas UI
+components/codex/            Codex task input and run status UI
+lib/graph/                   Graph event read/write/reduce helpers
+lib/repo/                    Repository scanning and graph inference
+lib/observer/                OpenAI observer adapters
+lib/types/                   Shared observed graph types
+lib/demo/                    Mock demo event stream
+docs/                        Product, architecture, and protocol notes
+```
+
+## Scripts
+
+```bash
+npm run dev      # start local development
+npm run build    # build for production
+npm run start    # start the production server
+npm run lint     # run ESLint
+```
 
 ## Tech Stack
 
@@ -51,17 +104,17 @@ protocol used by the mock replay. Returned graph events are also appended to
 - React Flow
 - Codex App Server
 - OpenAI Responses observer
-- Mock-first graph event replay fallback
 
 ## Current Limitations
 
-- The canvas reads graph events, not raw Codex output.
-- The live observer falls back to adapter-derived graph events if OpenAI observation fails.
-- State in the browser is local; graph events are append-only JSONL on disk.
+- The canvas consumes graph events rather than raw Codex output.
+- The live observer can fall back to adapter-derived graph events if OpenAI observation fails.
+- Browser state is local; durable graph history is stored as append-only JSONL on disk.
+- The project is an MVP prototype, not a production multi-user system.
 
 ## Future Work
 
-- Normalize real `codex exec --json` output into graph events.
-- Add a full Codex SDK path if it becomes available for this workflow.
+- Normalize `codex exec --json` output into graph events.
 - Add graph snapshots.
 - Add validation for `.cocanvas/graph-events.jsonl`.
+- Expand the live Codex SDK/App Server integration path.
