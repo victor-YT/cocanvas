@@ -13,6 +13,19 @@ cocanvas is a single full-stack TypeScript app:
 - `lib/graph/`: graph construction and event update logic.
 - `lib/demo/`: mock PRD, graph, and Codex event sequence.
 
+The current main canvas is event-driven:
+
+```text
+.cocanvas/graph-events.jsonl
+  -> readGraphEvents()
+  -> reduceGraphEvents()
+  -> ObservedGraphState
+  -> canvas + timeline + inspector
+```
+
+PRD parsing and repository scanning are retained as scaffold code, but they do
+not drive the primary canvas path.
+
 ## Event Flow
 
 1. User starts a task.

@@ -1,5 +1,39 @@
 # Data Contracts
 
+The main canvas now uses the Observed Feature Graph protocol in
+`docs/GRAPH_PROTOCOL.md`.
+
+The primary flow is:
+
+```text
+GraphEvent[] -> reduceGraphEvents() -> ObservedGraphState -> canvas
+```
+
+Legacy `GraphState` and `CodexTimelineEvent` contracts are kept for older
+scaffold code, but new canvas work should use `lib/types/observedGraph.ts`.
+
+## Observed Graph Event
+
+```ts
+type GraphEvent =
+  | NodeUpsertEvent
+  | EdgeUpsertEvent
+  | StatusUpdateEvent
+  | EvidenceAddEvent
+  | RiskAddEvent;
+```
+
+## Observed Graph State
+
+```ts
+type ObservedGraphState = {
+  nodes: ObservedGraphNode[];
+  edges: ObservedGraphEdge[];
+  selectedNodeId?: string;
+  timeline: GraphTimelineItem[];
+};
+```
+
 ## Graph State
 
 ```ts

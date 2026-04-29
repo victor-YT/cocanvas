@@ -1,0 +1,127 @@
+import type { GraphEvent } from "@/lib/types/observedGraph";
+
+export const mockGraphEvents: GraphEvent[] = [
+  {
+    type: "node.upsert",
+    node: {
+      id: "password_reset",
+      nodeType: "feature",
+      title: "Password Reset",
+      status: "building",
+      summary: "Codex is building a password reset flow.",
+      confidence: 0.9,
+    },
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "request_reset_email",
+      nodeType: "flow",
+      title: "Request reset email",
+      status: "implemented",
+      summary: "User can request a password reset email.",
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "password_reset_contains_request_reset_email",
+      from: "password_reset",
+      to: "request_reset_email",
+      relation: "contains",
+      label: "contains",
+    },
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "set_new_password",
+      nodeType: "flow",
+      title: "Set new password",
+      status: "building",
+      summary: "User can set a new password using a reset token.",
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "password_reset_contains_set_new_password",
+      from: "password_reset",
+      to: "set_new_password",
+      relation: "contains",
+    },
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "token_expiry",
+      nodeType: "capability",
+      title: "Token expires",
+      status: "needs_evidence",
+      summary: "Reset tokens should expire after a time window.",
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "password_reset_contains_token_expiry",
+      from: "password_reset",
+      to: "token_expiry",
+      relation: "contains",
+    },
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "token_reuse_prevention",
+      nodeType: "capability",
+      title: "Token cannot be reused",
+      status: "needs_evidence",
+      summary: "Reset tokens should be consumed after first use.",
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "password_reset_contains_token_reuse",
+      from: "password_reset",
+      to: "token_reuse_prevention",
+      relation: "contains",
+    },
+  },
+  {
+    type: "risk.add",
+    targetId: "token_reuse_prevention",
+    risk: {
+      id: "reuse_test_failed",
+      severity: "high",
+      summary: "Token reuse test failed on first run.",
+    },
+  },
+  {
+    type: "evidence.add",
+    targetId: "token_reuse_prevention",
+    evidence: {
+      id: "reuse_test_passed",
+      kind: "test",
+      summary: "reset-token tests passed after patch.",
+      path: "tests/reset-token.test.ts",
+    },
+  },
+  {
+    type: "status.update",
+    targetId: "token_reuse_prevention",
+    status: "verified",
+    summary: "Token reuse prevention is verified by passing tests.",
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "billing_webhook",
+      nodeType: "cluster",
+      title: "Billing Webhook",
+      status: "unlinked",
+      summary: "Codex created billing webhook files during this run.",
+    },
+  },
+];

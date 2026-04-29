@@ -9,6 +9,6 @@ export async function GET() {
 
   return NextResponse.json({
     events,
-    timeline: reduceGraphEvents(events).timeline,
+    graph: reduceGraphEvents(events),
   });
 }
