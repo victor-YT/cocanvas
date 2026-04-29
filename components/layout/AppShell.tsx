@@ -201,6 +201,22 @@ function mentionStatusForNode(node: ObservedGraphNode) {
   return "implemented";
 }
 
+async function readJsonResponse<T>(response: Response, fallbackMessage: string) {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const isHtml = text.trimStart().startsWith("<");
+
+    throw new Error(
+      isHtml
+        ? `${fallbackMessage}: server returned an HTML error page. Check the Next.js terminal logs.`
+        : `${fallbackMessage}: server returned invalid JSON.`,
+    );
+  }
+}
+
 export function AppShell() {
   const {
     graph,
@@ -253,7 +269,10 @@ export function AppShell() {
       }
 
       const response = await fetch("/api/repo/current");
-      const data = (await response.json()) as { repoPath?: string };
+      const data = await readJsonResponse<{ repoPath?: string }>(
+        response,
+        "Current repo load failed",
+      );
 
       if (data.repoPath) {
         setRepoPath(data.repoPath);
@@ -351,11 +370,11 @@ export function AppShell() {
           const graphResponse = await fetch(
             `/api/graph?repoPath=${encodeURIComponent(repoPath)}`,
           );
-          const graphData = (await graphResponse.json()) as {
+          const graphData = await readJsonResponse<{
             events?: GraphEvent[];
             missingRelatedFilesByNodeId?: Record<string, string[]>;
             error?: string;
-          };
+          }>(graphResponse, "Project map load failed");
 
           if (!graphResponse.ok) {
             throw new Error(graphData.error ?? "Feature map load failed.");
@@ -385,14 +404,14 @@ export function AppShell() {
           },
           body: JSON.stringify({ repoPath, persist: true, replace: true }),
         });
-        const data = (await response.json()) as {
+        const data = await readJsonResponse<{
           artifacts?: unknown[];
           events?: GraphEvent[];
           mode?: string;
           observerError?: string;
           productAreaCount?: number;
           error?: string;
-        };
+        }>(response, "Repository import failed");
 
         if (!response.ok) {
           throw new Error(data.error ?? "Repository import failed.");
@@ -503,11 +522,11 @@ export function AppShell() {
           effort: options.effort,
         }),
       });
-      const data = (await response.json()) as {
+      const data = await readJsonResponse<{
         assistantText?: string;
         graphEvents?: GraphEvent[];
         error?: string;
-      };
+      }>(response, "Codex task failed");
 
       if (!response.ok) {
         throw new Error(data.error ?? "Codex task failed.");
@@ -571,11 +590,11 @@ export function AppShell() {
   async function selectRepo() {
     try {
       const response = await fetch("/api/repo/select", { method: "POST" });
-      const data = (await response.json()) as {
+      const data = await readJsonResponse<{
         repoPath?: string;
         cancelled?: boolean;
         error?: string;
-      };
+      }>(response, "Folder selection failed");
 
       if (data.cancelled) {
         return;
