@@ -72,6 +72,15 @@ function BoltIcon() {
   );
 }
 
+function RepoContextIcon() {
+  return (
+    <Icon className="h-4 w-4">
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v6A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5Z" />
+      <path d="m10 12 2 2 3-4" />
+    </Icon>
+  );
+}
+
 function ChevronIcon() {
   return (
     <Icon className="h-3.5 w-3.5">
@@ -141,7 +150,7 @@ function UpwardPicker<T extends string>({
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-xs font-bold text-zinc-700 shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {icon}
         <span className="whitespace-nowrap">{selected.label}</span>
@@ -151,7 +160,7 @@ function UpwardPicker<T extends string>({
       </button>
 
       {open ? (
-        <div className="absolute bottom-full right-0 z-50 mb-2 w-max min-w-full rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-[0_14px_36px_rgba(24,24,27,0.14)]">
+        <div className="absolute bottom-full right-0 z-50 mb-2 w-max min-w-full rounded-2xl border border-black/10 bg-white p-1.5 shadow-[0_14px_36px_rgba(24,24,27,0.14)]">
           {options.map((option) => (
             <button
               key={option.value}
@@ -182,7 +191,19 @@ export function CodexChatPanel({
   onSubmit,
 }: CodexChatPanelProps) {
   const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const canSubmit = draft.trim().length > 0 && !isRunning;
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 70), 146)}px`;
+  }, [draft]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -198,17 +219,26 @@ export function CodexChatPanel({
     <section className="pointer-events-auto w-full max-w-[640px] text-zinc-950">
       <form
         onSubmit={handleSubmit}
-        className="rounded-[22px] border border-zinc-200 bg-white/96 p-2.5 shadow-[0_16px_42px_rgba(24,24,27,0.12)] backdrop-blur"
+        className="rounded-[30px] border border-black/10 bg-white/95 px-4 py-3 shadow-[0_18px_52px_rgba(24,24,27,0.13)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-300 focus-within:border-black/15 focus-within:shadow-[0_22px_60px_rgba(24,24,27,0.16)]"
       >
         <textarea
+          ref={textareaRef}
           value={draft}
           disabled={isRunning}
           onChange={(event) => onDraftChange(event.target.value)}
-          className="min-h-[58px] w-full resize-none rounded-[17px] bg-zinc-50/70 px-4 py-3 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-500"
+          rows={1}
+          className="block max-h-[146px] min-h-[70px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[height,color] duration-200 ease-out placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:text-zinc-500"
           placeholder="Ask Codex to build or change this repo."
         />
 
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex h-10 items-center gap-2 rounded-full border border-black/10 bg-white px-3 text-xs font-bold text-zinc-600 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+              <RepoContextIcon />
+              Repo
+            </span>
+          </div>
+
           {/* Quick actions are hidden until they map to first-class run modes. */}
           <div className="flex shrink-0 items-center gap-2">
             <UpwardPicker
@@ -241,7 +271,7 @@ export function CodexChatPanel({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-zinc-950 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-zinc-950 px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(24,24,27,0.16)] transition hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none"
             >
               {isRunning ? <SpinnerIcon /> : <ArrowUpIcon />}
               {isRunning ? "Running" : "Run"}

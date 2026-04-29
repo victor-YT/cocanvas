@@ -26,7 +26,7 @@ const statusTone: Record<CodexRunStatus, string> = {
   idle: "bg-zinc-100 text-zinc-600",
   working: "bg-emerald-50 text-emerald-700",
   testing: "bg-blue-50 text-blue-700",
-  completed: "bg-emerald-50 text-emerald-700",
+  completed: "bg-emerald-100 text-emerald-700",
   failed: "bg-amber-50 text-amber-700",
 };
 
@@ -96,13 +96,13 @@ export function CodexRunStatusBar({
   return (
     <section
       aria-live="polite"
-      className={`cocanvas-run-status pointer-events-auto relative flex min-h-14 w-full max-w-[640px] items-center justify-between gap-3 overflow-hidden rounded-full border border-zinc-200 bg-white/92 px-4 py-2 text-zinc-950 shadow-[0_14px_42px_rgba(24,24,27,0.12)] backdrop-blur-xl ${
+      className={`cocanvas-run-status pointer-events-auto relative flex min-h-12 w-full max-w-[640px] items-center justify-between gap-3 overflow-hidden rounded-full border border-black/10 bg-white/86 px-3.5 py-1.5 text-zinc-950 shadow-[0_10px_34px_rgba(24,24,27,0.09)] backdrop-blur-xl transition-[box-shadow,background-color] duration-300 ${
         active ? "cocanvas-run-status-active" : ""
       }`}
     >
       <div className="relative z-10 flex min-w-0 items-center gap-3">
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${statusTone[status]}`}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${statusTone[status]}`}
         >
           {active ? (
             <span className="cocanvas-working-dot h-3 w-3 rounded-full bg-emerald-400" />
@@ -114,7 +114,7 @@ export function CodexRunStatusBar({
         </span>
 
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2 text-sm font-bold">
+          <div className="flex min-w-0 items-center gap-2 text-[13px] font-bold">
             <span className="shrink-0">{statusTitle[status]}</span>
             {elapsed && active ? (
               <span className="shrink-0 text-xs font-bold text-zinc-400">
@@ -122,7 +122,7 @@ export function CodexRunStatusBar({
               </span>
             ) : null}
           </div>
-          <div className="truncate text-xs font-bold text-zinc-500">
+          <div className="truncate text-[11px] font-bold text-zinc-500">
             {phase ? `${phase} - ` : ""}
             {message || summary || "Waiting for a task."}
           </div>

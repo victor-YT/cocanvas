@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -315,66 +322,99 @@ const nodeTypes = {
 };
 
 function Inspector({ node }: { node?: ObservedGraphNode }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+
+    if (!node || !content) {
+      setHeight(0);
+      return;
+    }
+
+    function updateHeight() {
+      if (!content) {
+        return;
+      }
+
+      setHeight(Math.min(content.scrollHeight, 520));
+    }
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(content);
+
+    return () => observer.disconnect();
+  }, [node]);
+
   if (!node) {
     return null;
   }
 
   return (
-    <aside className="pointer-events-auto absolute bottom-[236px] right-5 z-30 w-[320px] rounded-[22px] border border-zinc-200 bg-white/96 p-4 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur">
-      <div className="text-sm font-bold">{node.title}</div>
-      <div className="mt-1 text-xs font-bold text-zinc-500">
-        Status: {statusLabel[displayStatus(node)]}
-      </div>
-      {node.summary ? (
-        <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
-          {node.summary}
-        </p>
-      ) : null}
-      <div className="mt-4 grid gap-3 text-xs font-semibold text-zinc-600">
-        <div>
-          <div className="font-bold text-zinc-900">Evidence</div>
-          {node.evidence.length > 0 ? (
-            <ul className="mt-1 grid gap-1">
-              {node.evidence.map((evidence) => (
-                <li key={evidence.id}>{evidence.summary}</li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-1 text-zinc-400">No evidence yet.</div>
-          )}
-        </div>
-        <div>
-          <div className="font-bold text-zinc-900">Risks</div>
-          {node.risks.length > 0 ? (
-            <ul className="mt-1 grid gap-1">
-              {node.risks.map((risk) => (
-                <li key={risk.id}>{risk.summary}</li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-1 text-zinc-400">No risks observed.</div>
-          )}
-        </div>
-        {node.relatedFiles.length > 0 ? (
-          <div>
-            <div className="font-bold text-zinc-900">Related files</div>
-            <ul className="mt-1 grid gap-1">
-              {node.relatedFiles.map((file) => (
-                <li key={file} className="break-all">
-                  {file}
-                </li>
-              ))}
-            </ul>
+    <aside
+      className="pointer-events-auto absolute bottom-[250px] right-5 z-30 w-[320px] overflow-hidden rounded-[22px] border border-zinc-200 bg-white/96 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur transition-[height,opacity,transform] duration-300 ease-out"
+      style={{ height }}
+    >
+      <div className="h-full overflow-y-auto">
+        <div ref={contentRef} className="p-4">
+          <div className="text-sm font-bold">{node.title}</div>
+          <div className="mt-1 text-xs font-bold text-zinc-500">
+            Status: {statusLabel[displayStatus(node)]}
           </div>
-        ) : null}
-        {node.rawEvents.length > 0 ? (
-          <div>
-            <div className="font-bold text-zinc-900">Raw events</div>
-            <div className="mt-1 text-zinc-400">
-              {node.rawEvents.length} graph events attached.
+          {node.summary ? (
+            <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
+              {node.summary}
+            </p>
+          ) : null}
+          <div className="mt-4 grid gap-3 text-xs font-semibold text-zinc-600">
+            <div>
+              <div className="font-bold text-zinc-900">Evidence</div>
+              {node.evidence.length > 0 ? (
+                <ul className="mt-1 grid gap-1">
+                  {node.evidence.map((evidence) => (
+                    <li key={evidence.id}>{evidence.summary}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-1 text-zinc-400">No evidence yet.</div>
+              )}
             </div>
+            <div>
+              <div className="font-bold text-zinc-900">Risks</div>
+              {node.risks.length > 0 ? (
+                <ul className="mt-1 grid gap-1">
+                  {node.risks.map((risk) => (
+                    <li key={risk.id}>{risk.summary}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-1 text-zinc-400">No risks observed.</div>
+              )}
+            </div>
+            {node.relatedFiles.length > 0 ? (
+              <div>
+                <div className="font-bold text-zinc-900">Related files</div>
+                <ul className="mt-1 grid gap-1">
+                  {node.relatedFiles.map((file) => (
+                    <li key={file} className="break-all">
+                      {file}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {node.rawEvents.length > 0 ? (
+              <div>
+                <div className="font-bold text-zinc-900">Raw events</div>
+                <div className="mt-1 text-zinc-400">
+                  {node.rawEvents.length} graph events attached.
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </div>
     </aside>
   );
@@ -426,7 +466,7 @@ function FeatureCanvasInner({
 
       {runStatusBar || chatPanel ? (
         <div
-          className="pointer-events-none absolute bottom-5 left-5 right-5 z-30 flex flex-col items-center justify-center gap-2"
+          className="pointer-events-none absolute bottom-6 left-5 right-5 z-30 flex flex-col items-center justify-center gap-3"
         >
           {runStatusBar}
           {chatPanel}

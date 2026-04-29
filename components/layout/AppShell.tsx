@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FolderGit2 } from "lucide-react";
 import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphEvent } from "@/lib/types/observedGraph";
@@ -86,6 +87,7 @@ export function AppShell() {
   } = useGraphStore([]);
   const [isReplaying, setIsReplaying] = useState(false);
   const [isCodexRunning, setIsCodexRunning] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [repoPath, setRepoPath] = useState("Loading repo...");
   const [chatDraft, setChatDraft] = useState("");
@@ -94,6 +96,7 @@ export function AppShell() {
   const [runMessage, setRunMessage] = useState("Choose a repo, then ask Codex what to build.");
   const [runStartedAt, setRunStartedAt] = useState<number>();
   const [elapsed, setElapsed] = useState("0s");
+  const isBusy = isReplaying || isCodexRunning || isImporting;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setMounted(true), 0);
@@ -127,6 +130,10 @@ export function AppShell() {
   }, [runStartedAt, runStatus]);
 
   async function runDemoReplay() {
+    if (isBusy) {
+      return;
+    }
+
     setIsReplaying(true);
     setRunStatus("working");
     setRunPhase("Demo replay");
@@ -151,6 +158,10 @@ export function AppShell() {
   }
 
   function handleResetCanvas() {
+    if (isBusy) {
+      return;
+    }
+
     resetCanvas();
     setRunStatus("idle");
     setRunPhase("Ready");
@@ -168,6 +179,10 @@ export function AppShell() {
     },
   ) {
     if (!prompt) {
+      return;
+    }
+
+    if (isBusy) {
       return;
     }
 
@@ -226,6 +241,57 @@ export function AppShell() {
     });
   }
 
+  async function importExistingRepo() {
+    if (isBusy) {
+      return;
+    }
+
+    setIsImporting(true);
+    setRunStatus("working");
+    setRunPhase("Importing repo");
+    setRunMessage("Scanning the current repository snapshot.");
+    setRunStartedAt(Date.now());
+    setElapsed("0s");
+    resetCanvas();
+
+    try {
+      const response = await fetch("/api/repo/import", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ repoPath }),
+      });
+      const data = (await response.json()) as {
+        artifacts?: unknown[];
+        events?: GraphEvent[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Repository import failed.");
+      }
+
+      data.events?.forEach((event) => applyGraphEvent(event));
+      setRunStatus("completed");
+      setRunPhase("Import completed");
+      setRunMessage(
+        `${data.artifacts?.length ?? 0} files scanned - ${
+          data.events?.length ?? 0
+        } graph events applied.`,
+      );
+    } catch (error) {
+      setRunStatus("failed");
+      setRunPhase("Import failed");
+      setRunMessage(
+        error instanceof Error ? error.message : "Repository import failed.",
+      );
+    } finally {
+      setIsImporting(false);
+      setRunStartedAt(undefined);
+    }
+  }
+
   async function selectRepo() {
     try {
       const response = await fetch("/api/repo/select", { method: "POST" });
@@ -249,11 +315,11 @@ export function AppShell() {
     }
   }
 
-  function repoLabel(path: string) {
+  function projectName(path: string) {
     const parts = path.split("/").filter(Boolean);
-    const tail = parts.slice(-2).join("/");
+    const name = parts.at(-1);
 
-    return tail ? `/${tail}` : path;
+    return name || path;
   }
 
   if (!mounted) {
@@ -279,11 +345,11 @@ export function AppShell() {
                 type="button"
                 onClick={selectRepo}
                 title={repoPath}
-                className="inline-flex h-11 items-center rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold shadow-sm transition hover:bg-zinc-50"
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-4 text-sm font-bold shadow-sm transition hover:bg-zinc-50"
               >
-                <span className="font-semibold text-zinc-900">cocanvas</span>
-                <span className="ml-2 max-w-[240px] truncate font-semibold text-zinc-500">
-                  {repoLabel(repoPath)}
+                <FolderGit2 className="h-4 w-4 text-zinc-600" strokeWidth={2.2} />
+                <span className="max-w-[180px] truncate text-zinc-900">
+                  {projectName(repoPath)}
                 </span>
               </button>
             </>
@@ -292,7 +358,15 @@ export function AppShell() {
             <>
               <button
                 type="button"
-                disabled={isReplaying || isCodexRunning}
+                disabled={isBusy}
+                onClick={importExistingRepo}
+                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isImporting ? "Importing" : "Import Existing Repo"}
+              </button>
+              <button
+                type="button"
+                disabled={isBusy}
                 onClick={runDemoReplay}
                 className="h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
               >
@@ -300,8 +374,9 @@ export function AppShell() {
               </button>
               <button
                 type="button"
+                disabled={isBusy}
                 onClick={handleResetCanvas}
-                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Reset Canvas
               </button>
@@ -310,7 +385,7 @@ export function AppShell() {
           chatPanel={
             <CodexChatPanel
               draft={chatDraft}
-              isRunning={isReplaying || isCodexRunning}
+              isRunning={isBusy}
               onDraftChange={setChatDraft}
               onSubmit={submitCodexChat}
             />
