@@ -190,6 +190,7 @@ export function AppShell() {
     selectNode,
     clearSelectedNode,
     applyGraphEvents,
+    replaceEvents,
     resetCanvas,
   } = useGraphStore([]);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -228,6 +229,13 @@ export function AppShell() {
 
   useEffect(() => {
     async function loadCurrentRepo() {
+      const storedRepoPath = window.localStorage.getItem("cocanvas.repoPath");
+
+      if (storedRepoPath) {
+        setRepoPath(storedRepoPath);
+        return;
+      }
+
       const response = await fetch("/api/repo/current");
       const data = (await response.json()) as { repoPath?: string };
 
@@ -434,24 +442,47 @@ export function AppShell() {
 
     autoImportedRepoRef.current = repoPath;
 
-    async function autoImportExistingRepo() {
+    async function loadOrImportRepoGraph() {
       setCanvasMode("real");
       clearSelectedNode();
       setIsImporting(true);
       setRunStatus("working");
-      setRunPhase("Syncing repo");
-      setRunMessage("Scanning the current repository snapshot.");
+      setRunPhase("Loading repo");
+      setRunMessage("Checking for a saved feature map.");
       setRunStartedAt(Date.now());
       setElapsed("0s");
-      resetCanvas();
 
       try {
+        const graphResponse = await fetch(
+          `/api/graph?repoPath=${encodeURIComponent(repoPath)}`,
+        );
+        const graphData = (await graphResponse.json()) as {
+          events?: GraphEvent[];
+          error?: string;
+        };
+
+        if (!graphResponse.ok) {
+          throw new Error(graphData.error ?? "Feature map load failed.");
+        }
+
+        if ((graphData.events?.length ?? 0) > 0) {
+          replaceEvents(graphData.events ?? []);
+          setRunStatus("completed");
+          setRunPhase("Feature map loaded");
+          setRunMessage(`${graphData.events?.length ?? 0} saved graph events restored.`);
+          return;
+        }
+
+        setRunPhase("Analyzing repo");
+        setRunMessage("Scanning the current repository snapshot.");
+        resetCanvas();
+
         const response = await fetch("/api/repo/import", {
           method: "POST",
           headers: {
             "content-type": "application/json",
           },
-          body: JSON.stringify({ repoPath, persist: false }),
+          body: JSON.stringify({ repoPath, persist: true }),
         });
         const data = (await response.json()) as {
           artifacts?: unknown[];
@@ -464,7 +495,7 @@ export function AppShell() {
           throw new Error(data.error ?? "Repository import failed.");
         }
 
-        applyGraphEvents(data.events ?? []);
+        replaceEvents(data.events ?? []);
         setRunStatus("completed");
         setRunPhase("Repo synced");
         setRunMessage(
@@ -484,7 +515,7 @@ export function AppShell() {
       }
     }
 
-    void autoImportExistingRepo();
+    void loadOrImportRepoGraph();
   }, [
     mounted,
     repoPath,
@@ -492,7 +523,7 @@ export function AppShell() {
     isBusy,
     clearSelectedNode,
     resetCanvas,
-    applyGraphEvents,
+    replaceEvents,
   ]);
 
   async function selectRepo() {
@@ -500,14 +531,21 @@ export function AppShell() {
       const response = await fetch("/api/repo/select", { method: "POST" });
       const data = (await response.json()) as {
         repoPath?: string;
+        cancelled?: boolean;
         error?: string;
       };
+
+      if (data.cancelled) {
+        return;
+      }
 
       if (!response.ok || !data.repoPath) {
         throw new Error(data.error ?? "Folder selection failed.");
       }
 
       setRepoPath(data.repoPath);
+      window.localStorage.setItem("cocanvas.repoPath", data.repoPath);
+      autoImportedRepoRef.current = undefined;
       resetCanvas();
       setCanvasMode("real");
       clearSelectedNode();

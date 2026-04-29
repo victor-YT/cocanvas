@@ -4,8 +4,8 @@ import type { GraphEvent } from "@/lib/types/observedGraph";
 
 const GRAPH_EVENTS_PATH = ".cocanvas/graph-events.jsonl";
 
-export function graphEventsPath() {
-  return resolve(process.cwd(), GRAPH_EVENTS_PATH);
+export function graphEventsPath(rootPath = process.cwd()) {
+  return resolve(rootPath, GRAPH_EVENTS_PATH);
 }
 
 export function parseGraphEventLine(line: string): GraphEvent | undefined {
@@ -34,9 +34,9 @@ export function parseGraphEventLine(line: string): GraphEvent | undefined {
   return undefined;
 }
 
-export async function readGraphEvents(): Promise<GraphEvent[]> {
+export async function readGraphEvents(rootPath = process.cwd()): Promise<GraphEvent[]> {
   try {
-    const contents = await readFile(graphEventsPath(), "utf8");
+    const contents = await readFile(graphEventsPath(rootPath), "utf8");
     const events = contents
       .split(/\r?\n/)
       .map(parseGraphEventLine)

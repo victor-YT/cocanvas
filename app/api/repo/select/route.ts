@@ -26,12 +26,18 @@ export async function POST() {
       repoPath: stdout.trim().replace(/\/$/, ""),
     });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Folder selection was cancelled.";
+
+    if (message.includes("User cancelled") || message.includes("(-128)")) {
+      return NextResponse.json({
+        cancelled: true,
+      });
+    }
+
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Folder selection was cancelled.",
+        error: message,
       },
       { status: 400 },
     );
