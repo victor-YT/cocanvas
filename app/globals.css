@@ -89,6 +89,11 @@ button:disabled {
   transform: translateY(-1px);
 }
 
+.cocanvas-mention-menu {
+  animation: cocanvas-mention-menu-in 160ms ease-out;
+  transform-origin: bottom center;
+}
+
 .cocanvas-working-dot {
   animation: cocanvas-working-pulse 1.7s ease-in-out infinite;
   box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.42);
@@ -158,6 +163,18 @@ button:disabled {
 @keyframes cocanvas-edge-flow {
   to {
     stroke-dashoffset: -16;
+  }
+}
+
+@keyframes cocanvas-mention-menu-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

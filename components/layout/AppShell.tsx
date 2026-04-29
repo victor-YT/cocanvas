@@ -210,7 +210,14 @@ export function AppShell() {
     .map((node) => ({
       id: node.id,
       title: node.title,
-      status: node.status,
+      status:
+        node.risks.length > 0 || node.status === "risk"
+          ? "risk"
+          : node.status === "verified"
+            ? "verified"
+            : node.status === "building"
+              ? "building"
+              : "implemented",
     }));
 
   useEffect(() => {
@@ -449,6 +456,7 @@ export function AppShell() {
         const data = (await response.json()) as {
           artifacts?: unknown[];
           events?: GraphEvent[];
+          productAreaCount?: number;
           error?: string;
         };
 
@@ -460,9 +468,9 @@ export function AppShell() {
         setRunStatus("completed");
         setRunPhase("Repo synced");
         setRunMessage(
-          `${data.artifacts?.length ?? 0} files scanned - ${
-            data.events?.length ?? 0
-          } graph events applied.`,
+          `Import completed · ${data.artifacts?.length ?? 0} files scanned · ${
+            data.productAreaCount ?? 0
+          } product areas mapped`,
         );
       } catch (error) {
         setRunStatus("failed");

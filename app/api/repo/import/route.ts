@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { appendGraphEvents } from "@/lib/graph/writeGraphEvents";
 import { reduceGraphEvents } from "@/lib/graph/reduceGraphEvents";
-import { inferFeatureGraphEventsFromArtifacts } from "@/lib/repo/inferFeatureGraphEvents";
+import { inferFeatureGraphFromArtifacts } from "@/lib/repo/inferFeatureGraphEvents";
 import { scanRepo } from "@/lib/repo/scanRepo";
 
 export const runtime = "nodejs";
@@ -28,7 +28,8 @@ export async function POST(request: Request) {
 
   try {
     const artifacts = await scanRepo(repoPath);
-    const events = inferFeatureGraphEventsFromArtifacts(artifacts);
+    const inference = inferFeatureGraphFromArtifacts(artifacts);
+    const events = inference.events;
     const shouldPersist = body.persist !== false;
     let persistedGraphEvents = false;
 
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
       mode: "repo-import",
       artifacts,
       events,
+      productAreaCount: inference.productAreaCount,
       graph: reduceGraphEvents(events),
       persistedGraphEvents,
     });

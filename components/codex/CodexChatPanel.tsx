@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   CODEX_MODEL_OPTIONS,
   CODEX_REASONING_EFFORT_OPTIONS,
@@ -42,6 +48,9 @@ type MentionTrigger = {
   range: Range;
   activeIndex: number;
 };
+
+const minEditorHeight = 52;
+const maxEditorHeight = 146;
 
 const defaultOptions: CodexRunOptions = {
   model: DEFAULT_CODEX_MODEL,
@@ -195,10 +204,38 @@ function isMentionElement(node: Node | null): node is HTMLElement {
   return node instanceof HTMLElement && node.dataset.mentionId !== undefined;
 }
 
+function mentionStatusTone(status?: string) {
+  if (status === "risk") {
+    return "bg-rose-50 text-rose-700 ring-rose-200/80 hover:bg-rose-100";
+  }
+
+  if (status === "implemented") {
+    return "bg-blue-50 text-blue-700 ring-blue-200/80 hover:bg-blue-100";
+  }
+
+  if (status === "verified" || status === "building") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200/80 hover:bg-emerald-100";
+  }
+
+  if (status === "unlinked") {
+    return "bg-purple-50 text-purple-700 ring-purple-200/80 hover:bg-purple-100";
+  }
+
+  return "bg-zinc-100 text-zinc-600 ring-zinc-200/80 hover:bg-zinc-200";
+}
+
+function statusLabelForMention(status?: string) {
+  if (!status) {
+    return "mapped";
+  }
+
+  return status.replaceAll("_", " ");
+}
+
 function createMentionElement(mention: FeatureMentionOption) {
   const element = document.createElement("span");
   element.className =
-    "cocanvas-feature-mention mx-0.5 inline-flex max-w-full select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
+    `cocanvas-feature-mention mx-0.5 inline-flex max-w-full select-none items-center rounded-full px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 ring-1 ring-inset ${mentionStatusTone(mention.status)}`;
   element.contentEditable = "false";
   element.dataset.mentionId = mention.id;
   element.dataset.mentionTitle = mention.title;
@@ -562,6 +599,7 @@ export function CodexChatPanel({
     mentionIds: [],
   });
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null);
+  const [editorHeight, setEditorHeight] = useState(minEditorHeight);
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const canSubmit = input.text.trim().length > 0 && !isRunning;
@@ -620,6 +658,20 @@ export function CodexChatPanel({
     }));
   }
 
+  function updateEditorHeight() {
+    window.requestAnimationFrame(() => {
+      const editor = editorRef.current;
+
+      if (!editor) {
+        return;
+      }
+
+      setEditorHeight(
+        Math.min(Math.max(editor.scrollHeight, minEditorHeight), maxEditorHeight),
+      );
+    });
+  }
+
   function syncInput() {
     const editor = editorRef.current;
 
@@ -629,6 +681,7 @@ export function CodexChatPanel({
 
     setInput(serializeEditor(editor));
     refreshMentionTrigger();
+    updateEditorHeight();
   }
 
   function clearEditor() {
@@ -641,6 +694,7 @@ export function CodexChatPanel({
     editor.replaceChildren();
     savedRangeRef.current = null;
     setMentionTrigger(null);
+    setEditorHeight(minEditorHeight);
     setInput({
       text: "",
       mentionIds: [],
@@ -683,6 +737,7 @@ export function CodexChatPanel({
     savedRangeRef.current = nextRange.cloneRange();
     setMentionTrigger(null);
     setInput(serializeEditor(editor));
+    updateEditorHeight();
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -704,10 +759,7 @@ export function CodexChatPanel({
         className="relative rounded-[30px] border border-black/10 bg-white/95 px-4 py-3 shadow-[0_18px_52px_rgba(24,24,27,0.13)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-300 focus-within:border-black/15 focus-within:shadow-[0_22px_60px_rgba(24,24,27,0.16)]"
       >
         {mentionTrigger ? (
-          <div className="absolute bottom-full left-0 z-50 mb-3 w-full overflow-hidden rounded-[24px] border border-black/10 bg-white/96 p-2 shadow-[0_18px_52px_rgba(24,24,27,0.16)] backdrop-blur-xl">
-            <div className="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-400">
-              Mention feature
-            </div>
+          <div className="cocanvas-mention-menu absolute bottom-full left-0 z-50 mb-3 w-full overflow-hidden rounded-[24px] border border-black/10 bg-white/96 p-2 shadow-[0_18px_52px_rgba(24,24,27,0.16)] backdrop-blur-xl">
             {visibleMentionOptions.length > 0 ? (
               <div className="grid gap-1">
                 {visibleMentionOptions.map((option, index) => (
@@ -725,7 +777,7 @@ export function CodexChatPanel({
                     }}
                     className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl px-3 py-2 text-left transition ${
                       index === mentionTrigger.activeIndex
-                        ? "bg-zinc-950 text-white shadow-sm"
+                        ? "bg-zinc-50 text-zinc-950 shadow-sm ring-1 ring-zinc-200"
                         : "text-zinc-800 hover:bg-zinc-100"
                     }`}
                   >
@@ -734,13 +786,9 @@ export function CodexChatPanel({
                     </span>
                     {option.status ? (
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                          index === mentionTrigger.activeIndex
-                            ? "bg-white/14 text-white/82"
-                            : "bg-zinc-100 text-zinc-500"
-                        }`}
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ring-inset ${mentionStatusTone(option.status)}`}
                       >
-                        {option.status}
+                        {statusLabelForMention(option.status)}
                       </span>
                     ) : null}
                   </button>
@@ -780,6 +828,11 @@ export function CodexChatPanel({
               const mention = clickedMentionElement(event.target, editor);
 
               if (!mention) {
+                if (input.text.trim().length === 0) {
+                  event.preventDefault();
+                  editor.focus();
+                  setCursorAtEnd(editor);
+                }
                 return;
               }
 
@@ -873,7 +926,8 @@ export function CodexChatPanel({
                 syncInput();
               }
             }}
-            className="max-h-[146px] min-h-[52px] w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[color] duration-200 ease-out focus:outline-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-zinc-500"
+            className="w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[height,color] duration-200 ease-out focus:outline-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-zinc-500"
+            style={{ height: editorHeight }}
             data-disabled={isRunning}
           />
         </div>
