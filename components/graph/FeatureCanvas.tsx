@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -218,6 +218,7 @@ function FeatureCanvasInner({
   chatPanel,
 }: FeatureCanvasProps) {
   const { fitView } = useReactFlow<CanvasNode, Edge>();
+  const didFitInitialNodes = useRef(false);
   const nodes = useMemo(
     () => buildNodes(graph, selectedNodeId),
     [graph, selectedNodeId],
@@ -226,15 +227,21 @@ function FeatureCanvasInner({
 
   useEffect(() => {
     if (nodes.length === 0) {
+      didFitInitialNodes.current = false;
       return;
     }
 
+    if (didFitInitialNodes.current) {
+      return;
+    }
+
+    didFitInitialNodes.current = true;
     const timeoutId = window.setTimeout(() => {
       void fitView({ padding: 0.34, maxZoom: 0.95, duration: 420 });
     }, 80);
 
     return () => window.clearTimeout(timeoutId);
-  }, [edges.length, fitView, nodes.length]);
+  }, [fitView, nodes.length]);
 
   return (
     <section className="relative h-[calc(100vh-24px)] min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -273,6 +280,8 @@ function FeatureCanvasInner({
         defaultViewport={{ x: 0, y: 0, zoom: 0.82 }}
         minZoom={0.35}
         maxZoom={1.6}
+        panOnDrag
+        panOnScroll
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
