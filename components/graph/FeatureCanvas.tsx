@@ -5,6 +5,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  Handle,
   MarkerType,
   PanOnScrollMode,
   Position,
@@ -137,13 +138,25 @@ const nodeTypeTone: Record<
   },
 };
 
-const nodeSize: Record<ObservedNodeType, string> = {
-  feature: "w-[270px] min-h-[112px]",
-  flow: "w-[260px] min-h-[108px]",
-  capability: "w-[265px] min-h-[108px]",
-  evidence: "w-[215px] min-h-[78px]",
-  risk: "w-[215px] min-h-[78px]",
-  cluster: "w-[265px] min-h-[108px]",
+export const NODE_SIZE: Record<
+  ObservedNodeType,
+  { width: number; height: number }
+> = {
+  feature: { width: 260, height: 120 },
+  flow: { width: 260, height: 110 },
+  capability: { width: 280, height: 120 },
+  evidence: { width: 240, height: 92 },
+  risk: { width: 240, height: 92 },
+  cluster: { width: 280, height: 120 },
+};
+
+const nodeSizeClass: Record<ObservedNodeType, string> = {
+  feature: "w-[260px] min-h-[120px]",
+  flow: "w-[260px] min-h-[110px]",
+  capability: "w-[280px] min-h-[120px]",
+  evidence: "w-[240px] min-h-[92px]",
+  risk: "w-[240px] min-h-[92px]",
+  cluster: "w-[280px] min-h-[120px]",
 };
 
 const nodeTypeLegendItems: ObservedNodeType[] = [
@@ -155,19 +168,29 @@ const nodeTypeLegendItems: ObservedNodeType[] = [
   "cluster",
 ];
 
-const layerX: Record<ObservedNodeType, number> = {
-  feature: 100,
-  flow: 430,
-  capability: 760,
-  evidence: 1090,
-  risk: 1090,
-  cluster: 1220,
+export const COLUMN_X: Record<ObservedNodeType, number> = {
+  feature: 80,
+  flow: 420,
+  capability: 780,
+  evidence: 1160,
+  risk: 1160,
+  cluster: 1540,
 };
 
-const nodeGapY = 210;
-const childGapY = 165;
-const canvasCenterY = 340;
-const minCanvasY = 120;
+const ROW_GAP = 36;
+const GROUP_GAP = 72;
+const CANVAS_TOP = 150;
+const ORPHAN_CENTER_Y = 330;
+
+const layoutColumns: ObservedNodeType[][] = [
+  ["feature"],
+  ["flow"],
+  ["capability"],
+  ["evidence", "risk"],
+  ["cluster"],
+];
+
+type NodePosition = { x: number; y: number };
 
 function visualEdge(edge: ObservedGraphEdge) {
   if (edge.relation === "supports" || edge.relation === "blocks") {
@@ -183,20 +206,14 @@ function visualEdge(edge: ObservedGraphEdge) {
   };
 }
 
-function stableSiblingOffset(index: number, gap: number) {
-  if (index === 0) {
-    return 0;
-  }
-
-  const distance = Math.ceil(index / 2) * gap;
-  return index % 2 === 1 ? distance : -distance;
-}
-
-function parentMapForGraph(graph: ObservedGraphState) {
-  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+function parentMapForGraph(
+  nodes: ObservedGraphNode[],
+  edges: ObservedGraphEdge[],
+) {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const parentsById = new Map<string, string[]>();
 
-  graph.edges.map(visualEdge).forEach((edge) => {
+  edges.map(visualEdge).forEach((edge) => {
     if (!nodesById.has(edge.from) || !nodesById.has(edge.to)) {
       return;
     }
@@ -233,6 +250,7 @@ function preferredParentId(
     return (
       parents.find((parentId) => nodesById.get(parentId)?.nodeType === "flow") ??
       parents.find((parentId) => nodesById.get(parentId)?.nodeType === "feature") ??
+      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "capability") ??
       parents[0]
     );
   }
@@ -240,108 +258,197 @@ function preferredParentId(
   return parents[0];
 }
 
-function siblingGroupKey(node: ObservedGraphNode, parentId?: string) {
-  if (node.nodeType === "evidence" || node.nodeType === "risk") {
-    return `detail:${parentId ?? "root"}`;
-  }
+function groupKeyForNode(
+  node: ObservedGraphNode,
+  columnIndex: number,
+  parentId?: string,
+) {
+  const lane =
+    node.nodeType === "evidence" || node.nodeType === "risk"
+      ? "detail"
+      : node.nodeType;
 
-  return `${node.nodeType}:${parentId ?? "root"}`;
+  return `${columnIndex}:${lane}:${parentId ?? "root"}`;
 }
 
-function resolveLayerCollisions(
+function nodeCenterY(node: ObservedGraphNode, position: NodePosition) {
+  return position.y + NODE_SIZE[node.nodeType].height / 2;
+}
+
+function resolveColumnCollisions(
   nodes: ObservedGraphNode[],
-  positionById: Map<string, { x: number; y: number }>,
+  positionById: Map<string, NodePosition>,
+  groupKeyById: Map<string, string>,
+  orderById: Map<string, number>,
 ) {
-  const nodesByLayer = new Map<number, ObservedGraphNode[]>();
+  const nodesByColumn = new Map<number, ObservedGraphNode[]>();
 
   nodes.forEach((node) => {
-    const x = positionById.get(node.id)?.x ?? layerX[node.nodeType];
-    nodesByLayer.set(x, [...(nodesByLayer.get(x) ?? []), node]);
+    const x = positionById.get(node.id)?.x ?? COLUMN_X[node.nodeType];
+    nodesByColumn.set(x, [...(nodesByColumn.get(x) ?? []), node]);
   });
 
-  nodesByLayer.forEach((layerNodes) => {
-    let nextY = minCanvasY;
+  nodesByColumn.forEach((columnNodes) => {
+    const groupsByKey = new Map<string, ObservedGraphNode[]>();
+    let previousBottom: number | undefined;
 
-    [...layerNodes]
-      .sort((nodeA, nodeB) => {
-        const positionA = positionById.get(nodeA.id);
-        const positionB = positionById.get(nodeB.id);
+    columnNodes.forEach((node) => {
+      const groupKey = groupKeyById.get(node.id) ?? node.id;
+      groupsByKey.set(groupKey, [...(groupsByKey.get(groupKey) ?? []), node]);
+    });
 
-        if ((positionA?.y ?? 0) !== (positionB?.y ?? 0)) {
-          return (positionA?.y ?? 0) - (positionB?.y ?? 0);
+    [...groupsByKey.values()]
+      .map((groupNodes) => {
+        const top = Math.min(
+          ...groupNodes.map(
+            (node) => positionById.get(node.id)?.y ?? ORPHAN_CENTER_Y,
+          ),
+        );
+        const bottom = Math.max(
+          ...groupNodes.map((node) => {
+            const y = positionById.get(node.id)?.y ?? ORPHAN_CENTER_Y;
+            return y + NODE_SIZE[node.nodeType].height;
+          }),
+        );
+        const order = Math.min(
+          ...groupNodes.map((node) => orderById.get(node.id) ?? 0),
+        );
+
+        return {
+          nodes: groupNodes,
+          top,
+          bottom,
+          order,
+        };
+      })
+      .sort((groupA, groupB) => {
+        if (groupA.top !== groupB.top) {
+          return groupA.top - groupB.top;
         }
 
-        return nodes.indexOf(nodeA) - nodes.indexOf(nodeB);
+        return groupA.order - groupB.order;
       })
-      .forEach((node) => {
-        const current = positionById.get(node.id) ?? {
-          x: layerX[node.nodeType],
-          y: canvasCenterY,
-        };
-        const y = Math.max(current.y, nextY);
+      .forEach((group) => {
+        const minY =
+          previousBottom === undefined ? CANVAS_TOP : previousBottom + GROUP_GAP;
+        const offset = Math.max(0, minY - group.top);
 
-        positionById.set(node.id, {
-          ...current,
-          y,
+        group.nodes.forEach((node) => {
+          const current = positionById.get(node.id) ?? {
+            x: COLUMN_X[node.nodeType],
+            y: ORPHAN_CENTER_Y,
+          };
+
+          positionById.set(node.id, {
+            ...current,
+            y: current.y + offset,
+          });
         });
-        nextY = y + nodeGapY;
+        previousBottom = group.bottom + offset;
       });
   });
 }
 
-function layoutGraph(graph: ObservedGraphState) {
-  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const parentsById = parentMapForGraph(graph);
-  const siblingIndexByParent = new Map<string, number>();
-  const positionById = new Map<string, { x: number; y: number }>();
+function placeColumnGroups(
+  columnNodes: ObservedGraphNode[],
+  columnIndex: number,
+  positionById: Map<string, NodePosition>,
+  groupKeyById: Map<string, string>,
+  parentsById: Map<string, string[]>,
+  nodesById: Map<string, ObservedGraphNode>,
+) {
+  const groups = new Map<
+    string,
+    { baseCenterY: number; nodes: ObservedGraphNode[] }
+  >();
 
-  graph.nodes.forEach((node, index) => {
-    if (node.nodeType === "feature") {
-      positionById.set(node.id, {
-        x: layerX.feature,
-        y: canvasCenterY + stableSiblingOffset(index, nodeGapY),
-      });
-    }
+  columnNodes.forEach((node) => {
+    const parentId = preferredParentId(node, parentsById, nodesById);
+    const parentNode = parentId ? nodesById.get(parentId) : undefined;
+    const parentPosition = parentId ? positionById.get(parentId) : undefined;
+    const baseCenterY =
+      parentNode && parentPosition
+        ? nodeCenterY(parentNode, parentPosition)
+        : node.nodeType === "cluster"
+          ? CANVAS_TOP + NODE_SIZE.cluster.height / 2
+          : ORPHAN_CENTER_Y;
+    const groupKey = groupKeyForNode(
+      node,
+      columnIndex,
+      parentPosition ? parentId : undefined,
+    );
+    const group = groups.get(groupKey) ?? {
+      baseCenterY,
+      nodes: [],
+    };
+
+    group.nodes.push(node);
+    groups.set(groupKey, group);
+    groupKeyById.set(node.id, groupKey);
   });
 
-  graph.nodes.forEach((node) => {
-    if (positionById.has(node.id)) {
-      return;
-    }
+  groups.forEach((group) => {
+    const totalHeight =
+      group.nodes.reduce(
+        (height, node) => height + NODE_SIZE[node.nodeType].height,
+        0,
+      ) +
+      Math.max(group.nodes.length - 1, 0) * ROW_GAP;
+    let y = group.baseCenterY - totalHeight / 2;
 
-    const parentId = preferredParentId(node, parentsById, nodesById);
-    const parent = parentId ? positionById.get(parentId) : undefined;
-    const parentKey = siblingGroupKey(node, parentId);
-    const siblingIndex = siblingIndexByParent.get(parentKey) ?? 0;
-    siblingIndexByParent.set(parentKey, siblingIndex + 1);
-
-    positionById.set(node.id, {
-      x: layerX[node.nodeType],
-      y:
-        (parent?.y ?? canvasCenterY) +
-        stableSiblingOffset(
-          siblingIndex,
-          node.nodeType === "evidence" || node.nodeType === "risk"
-            ? childGapY
-            : nodeGapY,
-        ),
+    group.nodes.forEach((node) => {
+      positionById.set(node.id, {
+        x: COLUMN_X[node.nodeType],
+        y,
+      });
+      y += NODE_SIZE[node.nodeType].height + ROW_GAP;
     });
   });
+}
 
-  resolveLayerCollisions(graph.nodes, positionById);
+export function layoutGraph(
+  nodes: ObservedGraphNode[],
+  edges: ObservedGraphEdge[],
+) {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const parentsById = parentMapForGraph(nodes, edges);
+  const positionById = new Map<string, NodePosition>();
+  const groupKeyById = new Map<string, string>();
+  const orderById = new Map(nodes.map((node, index) => [node.id, index]));
+
+  layoutColumns.forEach((columnTypes, columnIndex) => {
+    const columnNodes = nodes.filter((node) =>
+      columnTypes.includes(node.nodeType),
+    );
+
+    placeColumnGroups(
+      columnNodes,
+      columnIndex,
+      positionById,
+      groupKeyById,
+      parentsById,
+      nodesById,
+    );
+    resolveColumnCollisions(
+      columnNodes,
+      positionById,
+      groupKeyById,
+      orderById,
+    );
+  });
 
   return positionById;
 }
 
 function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasNode[] {
-  const positionById = layoutGraph(graph);
+  const positionById = layoutGraph(graph.nodes, graph.edges);
 
   return graph.nodes.map((node) => {
     return {
       id: node.id,
       type: "observed",
       data: { observedNode: node },
-      position: positionById.get(node.id) ?? { x: 0, y: canvasCenterY },
+      position: positionById.get(node.id) ?? { x: 0, y: ORPHAN_CENTER_Y },
       selected: selectedNodeId === node.id,
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
@@ -350,16 +457,24 @@ function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasN
 }
 
 function edgeStyle(relation: string) {
-  if (relation === "supports") {
-    return { stroke: "#6ee7b7", strokeWidth: 2.4 };
-  }
-
-  if (relation === "blocks") {
-    return { stroke: "#fda4af", strokeWidth: 2.4 };
+  if (relation === "contains") {
+    return { stroke: "#d4d4d8", strokeWidth: 2.1 };
   }
 
   if (relation === "enables") {
-    return { stroke: "#93c5fd", strokeWidth: 2.2 };
+    return { stroke: "#60a5fa", strokeWidth: 2.2 };
+  }
+
+  if (relation === "supports") {
+    return { stroke: "#34d399", strokeWidth: 2.4, strokeDasharray: "7 6" };
+  }
+
+  if (relation === "blocks") {
+    return { stroke: "#fb7185", strokeWidth: 2.4, strokeDasharray: "7 6" };
+  }
+
+  if (relation === "related") {
+    return { stroke: "#c084fc", strokeWidth: 2.1, strokeDasharray: "2 6" };
   }
 
   return { stroke: "#d4d4d8", strokeWidth: 2 };
@@ -407,7 +522,7 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div
-      className={`group cocanvas-node relative ${nodeSize[node.nodeType]} cursor-pointer overflow-visible rounded-[18px] border bg-white text-left text-zinc-900 ${typeTone.border} ${typeTone.shadow} transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(24,24,27,0.13)] ${
+      className={`group cocanvas-node relative ${nodeSizeClass[node.nodeType]} cursor-pointer overflow-visible rounded-[18px] border bg-white text-left text-zinc-900 ${typeTone.border} ${typeTone.shadow} transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(24,24,27,0.13)] ${
         isCompact ? "px-4 py-3.5" : "px-[18px] py-4"
       } ${
         selected ? `ring-2 ${typeTone.ring} ring-offset-2` : ""
@@ -415,6 +530,16 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
       role="button"
       tabIndex={0}
     >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2.5 !w-2.5 !border-0 !bg-transparent"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2.5 !w-2.5 !border-0 !bg-transparent"
+      />
       <span
         aria-hidden="true"
         className={`absolute bottom-3 left-3 top-3 w-1 rounded-full ${typeTone.accent}`}
