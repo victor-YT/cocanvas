@@ -20,21 +20,27 @@ export type CodexComposerInput = {
   mentionIds: string[];
 };
 
-export type FeatureMentionInsertRequest = {
+export type FeatureMentionOption = {
   id: string;
   title: string;
-  requestId: number;
+  status?: string;
 };
 
 type CodexChatPanelProps = {
   isRunning: boolean;
-  mentionRequest?: FeatureMentionInsertRequest;
+  mentionOptions: FeatureMentionOption[];
   onSubmit: (input: CodexComposerInput, options: CodexRunOptions) => boolean;
 };
 
 type PickerOption<T extends string> = {
   value: T;
   label: string;
+};
+
+type MentionTrigger = {
+  query: string;
+  range: Range;
+  activeIndex: number;
 };
 
 const defaultOptions: CodexRunOptions = {
@@ -189,7 +195,7 @@ function isMentionElement(node: Node | null): node is HTMLElement {
   return node instanceof HTMLElement && node.dataset.mentionId !== undefined;
 }
 
-function createMentionElement(mention: FeatureMentionInsertRequest) {
+function createMentionElement(mention: FeatureMentionOption) {
   const element = document.createElement("span");
   element.className =
     "cocanvas-feature-mention mx-0.5 inline-flex max-w-full select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
@@ -258,14 +264,6 @@ function endRange(editor: HTMLElement) {
   range.collapse(false);
 
   return range;
-}
-
-function rangeTextBefore(editor: HTMLElement, range: Range) {
-  const beforeRange = range.cloneRange();
-  beforeRange.selectNodeContents(editor);
-  beforeRange.setEnd(range.startContainer, range.startOffset);
-
-  return beforeRange.toString();
 }
 
 function rangeTextAfter(editor: HTMLElement, range: Range) {
@@ -505,9 +503,57 @@ function removeMentionAfterCaret(editor: HTMLElement) {
   return false;
 }
 
+function detectMentionTrigger(editor: HTMLElement): Omit<MentionTrigger, "activeIndex"> | null {
+  const selection = window.getSelection();
+
+  if (!selection?.rangeCount) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  if (!range.collapsed || !editor.contains(range.startContainer)) {
+    return null;
+  }
+
+  if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
+
+  const text = range.startContainer.textContent ?? "";
+  const beforeCaret = text.slice(0, range.startOffset);
+  const match = beforeCaret.match(/(?:^|\s)@([A-Za-z0-9 _./-]{0,48})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const query = match[1];
+  const triggerRange = document.createRange();
+  triggerRange.setStart(range.startContainer, range.startOffset - query.length - 1);
+  triggerRange.setEnd(range.startContainer, range.startOffset);
+
+  return {
+    query,
+    range: triggerRange,
+  };
+}
+
+function mentionMatches(options: FeatureMentionOption[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return options.slice(0, 7);
+  }
+
+  return options
+    .filter((option) => option.title.toLowerCase().includes(normalizedQuery))
+    .slice(0, 7);
+}
+
 export function CodexChatPanel({
   isRunning,
-  mentionRequest,
+  mentionOptions,
   onSubmit,
 }: CodexChatPanelProps) {
   const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
@@ -515,9 +561,13 @@ export function CodexChatPanel({
     text: "",
     mentionIds: [],
   });
+  const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const canSubmit = input.text.trim().length > 0 && !isRunning;
+  const visibleMentionOptions = mentionTrigger
+    ? mentionMatches(mentionOptions, mentionTrigger.query)
+    : [];
 
   useEffect(() => {
     function handleSelectionChange() {
@@ -531,7 +581,10 @@ export function CodexChatPanel({
         editor.contains(selection.anchorNode)
       ) {
         savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+        return;
       }
+
+      setMentionTrigger(null);
     }
 
     document.addEventListener("selectionchange", handleSelectionChange);
@@ -541,6 +594,32 @@ export function CodexChatPanel({
     };
   }, []);
 
+  function refreshMentionTrigger() {
+    const editor = editorRef.current;
+
+    if (!editor || isRunning || mentionOptions.length === 0) {
+      setMentionTrigger(null);
+      return;
+    }
+
+    const trigger = detectMentionTrigger(editor);
+
+    if (!trigger) {
+      setMentionTrigger(null);
+      return;
+    }
+
+    const matches = mentionMatches(mentionOptions, trigger.query);
+
+    setMentionTrigger((current) => ({
+      ...trigger,
+      activeIndex:
+        current?.query === trigger.query
+          ? Math.min(current.activeIndex, Math.max(matches.length - 1, 0))
+          : 0,
+    }));
+  }
+
   function syncInput() {
     const editor = editorRef.current;
 
@@ -549,6 +628,7 @@ export function CodexChatPanel({
     }
 
     setInput(serializeEditor(editor));
+    refreshMentionTrigger();
   }
 
   function clearEditor() {
@@ -560,43 +640,33 @@ export function CodexChatPanel({
 
     editor.replaceChildren();
     savedRangeRef.current = null;
+    setMentionTrigger(null);
     setInput({
       text: "",
       mentionIds: [],
     });
   }
 
-  useEffect(() => {
+  function insertMention(option: FeatureMentionOption) {
     const editor = editorRef.current;
+    const trigger = mentionTrigger;
 
-    if (!editor || !mentionRequest || isRunning) {
+    if (!editor || !trigger || isRunning) {
       return;
     }
 
     editor.focus();
 
     const selection = window.getSelection();
-    const savedRange = savedRangeRef.current;
-    const range =
-      savedRange &&
-      editor.contains(savedRange.startContainer) &&
-      editor.contains(savedRange.endContainer)
-        ? savedRange.cloneRange()
-        : endRange(editor);
+    const range = trigger.range.cloneRange();
 
     selection?.removeAllRanges();
     selection?.addRange(range);
     range.deleteContents();
 
-    const beforeText = rangeTextBefore(editor, range);
     const afterText = rangeTextAfter(editor, range);
     const fragment = document.createDocumentFragment();
-
-    if (beforeText.length > 0 && !/\s$/.test(beforeText)) {
-      fragment.append(document.createTextNode(" "));
-    }
-
-    const mentionElement = createMentionElement(mentionRequest);
+    const mentionElement = createMentionElement(option);
     const trailingSpace = document.createTextNode(
       afterText.length > 0 && /^\s/.test(afterText) ? "" : " ",
     );
@@ -611,8 +681,9 @@ export function CodexChatPanel({
     selection?.removeAllRanges();
     selection?.addRange(nextRange);
     savedRangeRef.current = nextRange.cloneRange();
+    setMentionTrigger(null);
     setInput(serializeEditor(editor));
-  }, [mentionRequest, isRunning]);
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -630,8 +701,59 @@ export function CodexChatPanel({
     <section className="pointer-events-auto w-full max-w-[640px] text-zinc-950">
       <form
         onSubmit={handleSubmit}
-        className="rounded-[30px] border border-black/10 bg-white/95 px-4 py-3 shadow-[0_18px_52px_rgba(24,24,27,0.13)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-300 focus-within:border-black/15 focus-within:shadow-[0_22px_60px_rgba(24,24,27,0.16)]"
+        className="relative rounded-[30px] border border-black/10 bg-white/95 px-4 py-3 shadow-[0_18px_52px_rgba(24,24,27,0.13)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-300 focus-within:border-black/15 focus-within:shadow-[0_22px_60px_rgba(24,24,27,0.16)]"
       >
+        {mentionTrigger ? (
+          <div className="absolute bottom-full left-0 z-50 mb-3 w-full overflow-hidden rounded-[24px] border border-black/10 bg-white/96 p-2 shadow-[0_18px_52px_rgba(24,24,27,0.16)] backdrop-blur-xl">
+            <div className="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-400">
+              Mention feature
+            </div>
+            {visibleMentionOptions.length > 0 ? (
+              <div className="grid gap-1">
+                {visibleMentionOptions.map((option, index) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      insertMention(option);
+                    }}
+                    onMouseEnter={() => {
+                      setMentionTrigger((current) =>
+                        current ? { ...current, activeIndex: index } : current,
+                      );
+                    }}
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl px-3 py-2 text-left transition ${
+                      index === mentionTrigger.activeIndex
+                        ? "bg-zinc-950 text-white shadow-sm"
+                        : "text-zinc-800 hover:bg-zinc-100"
+                    }`}
+                  >
+                    <span className="min-w-0 truncate text-sm font-bold">
+                      @{option.title}
+                    </span>
+                    {option.status ? (
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          index === mentionTrigger.activeIndex
+                            ? "bg-white/14 text-white/82"
+                            : "bg-zinc-100 text-zinc-500"
+                        }`}
+                      >
+                        {option.status}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl px-3 py-2 text-sm font-semibold text-zinc-400">
+                No matching feature
+              </div>
+            )}
+          </div>
+        ) : null}
+
         <div className="relative">
           {input.text.trim().length === 0 ? (
             <div className="pointer-events-none absolute left-1 top-1 text-[15px] font-semibold leading-6 text-zinc-400">
@@ -688,6 +810,56 @@ export function CodexChatPanel({
 
               if (!editor) {
                 return;
+              }
+
+              if (mentionTrigger) {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setMentionTrigger(null);
+                  return;
+                }
+
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setMentionTrigger((current) =>
+                    current
+                      ? {
+                          ...current,
+                          activeIndex: Math.min(
+                            current.activeIndex + 1,
+                            Math.max(visibleMentionOptions.length - 1, 0),
+                          ),
+                        }
+                      : current,
+                  );
+                  return;
+                }
+
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setMentionTrigger((current) =>
+                    current
+                      ? {
+                          ...current,
+                          activeIndex: Math.max(current.activeIndex - 1, 0),
+                        }
+                      : current,
+                  );
+                  return;
+                }
+
+                if (
+                  (event.key === "Enter" || event.key === "Tab") &&
+                  visibleMentionOptions.length > 0
+                ) {
+                  event.preventDefault();
+                  insertMention(
+                    visibleMentionOptions[
+                      Math.min(mentionTrigger.activeIndex, visibleMentionOptions.length - 1)
+                    ],
+                  );
+                  return;
+                }
               }
 
               if (event.key === "Backspace" && removeMentionBeforeCaret(editor)) {

@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 
 type RepoImportBody = {
   repoPath?: unknown;
+  persist?: unknown;
 };
 
 function readString(value: unknown) {
@@ -28,13 +29,16 @@ export async function POST(request: Request) {
   try {
     const artifacts = await scanRepo(repoPath);
     const events = inferFeatureGraphEventsFromArtifacts(artifacts);
+    const shouldPersist = body.persist !== false;
     let persistedGraphEvents = false;
 
-    try {
-      await appendGraphEvents(repoPath, events);
-      persistedGraphEvents = true;
-    } catch (error) {
-      console.error(error);
+    if (shouldPersist) {
+      try {
+        await appendGraphEvents(repoPath, events);
+        persistedGraphEvents = true;
+      } catch (error) {
+        console.error(error);
+      }
     }
 
     return NextResponse.json({

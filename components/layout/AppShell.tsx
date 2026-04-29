@@ -10,7 +10,6 @@ import {
   CodexChatPanel,
   type CodexComposerInput,
   type CodexRunOptions,
-  type FeatureMentionInsertRequest,
 } from "@/components/codex/CodexChatPanel";
 import {
   CodexRunStatusBar,
@@ -199,15 +198,20 @@ export function AppShell() {
   const [mounted, setMounted] = useState(false);
   const [repoPath, setRepoPath] = useState("");
   const [canvasMode, setCanvasMode] = useState<"real" | "demo">("real");
-  const [mentionRequest, setMentionRequest] =
-    useState<FeatureMentionInsertRequest>();
   const [runStatus, setRunStatus] = useState<CodexRunStatus>("idle");
   const [runPhase, setRunPhase] = useState<string | undefined>("Ready");
   const [runMessage, setRunMessage] = useState("Choose a repo, then ask Codex what to build.");
   const [runStartedAt, setRunStartedAt] = useState<number>();
   const [elapsed, setElapsed] = useState("0s");
-  const mentionRequestIdRef = useRef(0);
+  const autoImportedRepoRef = useRef<string | undefined>(undefined);
   const isBusy = isReplaying || isCodexRunning || isImporting;
+  const mentionOptions = graph.nodes
+    .filter((node) => node.nodeType !== "evidence" && node.nodeType !== "risk")
+    .map((node) => ({
+      id: node.id,
+      title: node.title,
+      status: node.status,
+    }));
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setMounted(true), 0);
@@ -412,65 +416,76 @@ export function AppShell() {
     return true;
   }
 
-  async function importExistingRepo() {
-    if (isBusy) {
+  useEffect(() => {
+    if (!mounted || !repoPath || canvasMode !== "real" || isBusy) {
       return;
     }
 
-    if (!repoPath) {
-      setRunStatus("failed");
-      setRunPhase("No project selected");
-      setRunMessage("Choose a repository before importing.");
+    if (autoImportedRepoRef.current === repoPath) {
       return;
     }
 
-    setCanvasMode("real");
-    clearSelectedNode();
-    setIsImporting(true);
-    setRunStatus("working");
-    setRunPhase("Importing repo");
-    setRunMessage("Scanning the current repository snapshot.");
-    setRunStartedAt(Date.now());
-    setElapsed("0s");
-    resetCanvas();
+    autoImportedRepoRef.current = repoPath;
 
-    try {
-      const response = await fetch("/api/repo/import", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ repoPath }),
-      });
-      const data = (await response.json()) as {
-        artifacts?: unknown[];
-        events?: GraphEvent[];
-        error?: string;
-      };
+    async function autoImportExistingRepo() {
+      setCanvasMode("real");
+      clearSelectedNode();
+      setIsImporting(true);
+      setRunStatus("working");
+      setRunPhase("Syncing repo");
+      setRunMessage("Scanning the current repository snapshot.");
+      setRunStartedAt(Date.now());
+      setElapsed("0s");
+      resetCanvas();
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "Repository import failed.");
+      try {
+        const response = await fetch("/api/repo/import", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ repoPath, persist: false }),
+        });
+        const data = (await response.json()) as {
+          artifacts?: unknown[];
+          events?: GraphEvent[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Repository import failed.");
+        }
+
+        applyGraphEvents(data.events ?? []);
+        setRunStatus("completed");
+        setRunPhase("Repo synced");
+        setRunMessage(
+          `${data.artifacts?.length ?? 0} files scanned - ${
+            data.events?.length ?? 0
+          } graph events applied.`,
+        );
+      } catch (error) {
+        setRunStatus("failed");
+        setRunPhase("Repo sync failed");
+        setRunMessage(
+          error instanceof Error ? error.message : "Repository import failed.",
+        );
+      } finally {
+        setIsImporting(false);
+        setRunStartedAt(undefined);
       }
-
-      applyGraphEvents(data.events ?? []);
-      setRunStatus("completed");
-      setRunPhase("Import completed");
-      setRunMessage(
-        `${data.artifacts?.length ?? 0} files scanned - ${
-          data.events?.length ?? 0
-        } graph events applied.`,
-      );
-    } catch (error) {
-      setRunStatus("failed");
-      setRunPhase("Import failed");
-      setRunMessage(
-        error instanceof Error ? error.message : "Repository import failed.",
-      );
-    } finally {
-      setIsImporting(false);
-      setRunStartedAt(undefined);
     }
-  }
+
+    void autoImportExistingRepo();
+  }, [
+    mounted,
+    repoPath,
+    canvasMode,
+    isBusy,
+    clearSelectedNode,
+    resetCanvas,
+    applyGraphEvents,
+  ]);
 
   async function selectRepo() {
     try {
@@ -518,18 +533,6 @@ export function AppShell() {
 
   function handleSelectNode(nodeId: string) {
     selectNode(nodeId);
-    const node = graph.nodes.find((item) => item.id === nodeId);
-
-    if (!node || node.nodeType === "evidence" || node.nodeType === "risk") {
-      return;
-    }
-
-    mentionRequestIdRef.current += 1;
-    setMentionRequest({
-      id: node.id,
-      title: node.title,
-      requestId: mentionRequestIdRef.current,
-    });
   }
 
   if (!mounted) {
@@ -569,14 +572,6 @@ export function AppShell() {
               <button
                 type="button"
                 disabled={isBusy}
-                onClick={importExistingRepo}
-                className={topPillClass}
-              >
-                {isImporting ? "Importing" : "Import Existing Repo"}
-              </button>
-              <button
-                type="button"
-                disabled={isBusy}
                 onClick={runDemoReplay}
                 className={primaryTopPillClass}
               >
@@ -595,7 +590,7 @@ export function AppShell() {
           chatPanel={
             <CodexChatPanel
               isRunning={isBusy}
-              mentionRequest={mentionRequest}
+              mentionOptions={mentionOptions}
               onSubmit={submitCodexChat}
             />
           }
