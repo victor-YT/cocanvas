@@ -89,26 +89,26 @@ function clamp(value: number, min: number, max: number) {
 
 function defaultPosition(node: ObservedGraphNode, index: number): CanvasPoint {
   if (node.nodeType === "feature") {
-    return { x: 120, y: 250 };
+    return { x: 110, y: 300 };
   }
 
   if (node.nodeType === "flow") {
-    return { x: 455, y: 120 + index * 128 };
+    return { x: 430, y: 95 + index * 165 };
   }
 
   if (node.nodeType === "capability") {
-    return { x: 455, y: 420 + index * 128 };
+    return { x: 430, y: 585 + index * 165 };
   }
 
   if (node.nodeType === "evidence") {
-    return { x: 840, y: 420 + index * 112 };
+    return { x: 815, y: 510 + index * 150 };
   }
 
   if (node.nodeType === "risk") {
-    return { x: 840, y: 260 + index * 112 };
+    return { x: 815, y: 175 + index * 150 };
   }
 
-  return { x: 120, y: 620 + index * 122 };
+  return { x: 1120, y: 300 + index * 155 };
 }
 
 function buildPositions(nodes: ObservedGraphNode[]) {
