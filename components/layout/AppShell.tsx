@@ -9,6 +9,7 @@ import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
 import {
   CodexChatPanel,
   type CodexComposerInput,
+  type FeatureMentionInsertRequest,
   type CodexRunOptions,
 } from "@/components/codex/CodexChatPanel";
 import {
@@ -184,6 +185,22 @@ ${referencedFeatures.map(featureContext).join("\n\n")}
 Please focus changes on the referenced feature(s) unless necessary.`;
 }
 
+function mentionStatusForNode(node: ObservedGraphNode) {
+  if (node.risks.length > 0 || node.status === "risk") {
+    return "risk";
+  }
+
+  if (node.status === "verified") {
+    return "verified";
+  }
+
+  if (node.status === "building") {
+    return "building";
+  }
+
+  return "implemented";
+}
+
 export function AppShell() {
   const {
     graph,
@@ -204,21 +221,17 @@ export function AppShell() {
   const [runMessage, setRunMessage] = useState("Choose a repo, then ask Codex what to build.");
   const [runStartedAt, setRunStartedAt] = useState<number>();
   const [elapsed, setElapsed] = useState("0s");
+  const [mentionInsertRequest, setMentionInsertRequest] =
+    useState<FeatureMentionInsertRequest>();
   const autoImportedRepoRef = useRef<string | undefined>(undefined);
+  const mentionRequestIdRef = useRef(0);
   const isBusy = isReplaying || isCodexRunning || isImporting;
   const mentionOptions = graph.nodes
     .filter((node) => node.nodeType !== "evidence" && node.nodeType !== "risk")
     .map((node) => ({
       id: node.id,
       title: node.title,
-      status:
-        node.risks.length > 0 || node.status === "risk"
-          ? "risk"
-          : node.status === "verified"
-            ? "verified"
-            : node.status === "building"
-              ? "building"
-              : "implemented",
+      status: mentionStatusForNode(node),
     }));
 
   useEffect(() => {
@@ -581,6 +594,23 @@ export function AppShell() {
     selectNode(nodeId);
   }
 
+  function insertMentionForNode(node: ObservedGraphNode) {
+    mentionRequestIdRef.current += 1;
+    setMentionInsertRequest({
+      id: node.id,
+      title: node.title,
+      status: mentionStatusForNode(node),
+      requestId: mentionRequestIdRef.current,
+    });
+  }
+
+  function askCodexAboutNode(node: ObservedGraphNode) {
+    insertMentionForNode(node);
+    setRunStatus("idle");
+    setRunPhase("Ready");
+    setRunMessage(`Ask Codex about @${node.title}.`);
+  }
+
   if (!mounted) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#f7f7f4] text-zinc-950">
@@ -598,6 +628,9 @@ export function AppShell() {
           graph={graph}
           selectedNodeId={graph.selectedNodeId}
           onSelectNode={handleSelectNode}
+          onClearSelectedNode={clearSelectedNode}
+          onMentionNode={insertMentionForNode}
+          onAskCodexAboutNode={askCodexAboutNode}
           topControls={
             <>
               <button
@@ -636,6 +669,7 @@ export function AppShell() {
           chatPanel={
             <CodexChatPanel
               isRunning={isBusy}
+              insertMentionRequest={mentionInsertRequest}
               mentionOptions={mentionOptions}
               onSubmit={submitCodexChat}
             />

@@ -32,8 +32,13 @@ export type FeatureMentionOption = {
   status?: string;
 };
 
+export type FeatureMentionInsertRequest = FeatureMentionOption & {
+  requestId: number;
+};
+
 type CodexChatPanelProps = {
   isRunning: boolean;
+  insertMentionRequest?: FeatureMentionInsertRequest;
   mentionOptions: FeatureMentionOption[];
   onSubmit: (input: CodexComposerInput, options: CodexRunOptions) => boolean;
 };
@@ -301,6 +306,14 @@ function endRange(editor: HTMLElement) {
   range.collapse(false);
 
   return range;
+}
+
+function editorOwnsRange(editor: HTMLElement, range: Range | null) {
+  return Boolean(
+    range &&
+      editor.contains(range.startContainer) &&
+      editor.contains(range.endContainer),
+  );
 }
 
 function rangeTextAfter(editor: HTMLElement, range: Range) {
@@ -590,6 +603,7 @@ function mentionMatches(options: FeatureMentionOption[], query: string) {
 
 export function CodexChatPanel({
   isRunning,
+  insertMentionRequest,
   mentionOptions,
   onSubmit,
 }: CodexChatPanelProps) {
@@ -701,18 +715,16 @@ export function CodexChatPanel({
     });
   }
 
-  function insertMention(option: FeatureMentionOption) {
+  function insertMentionAtRange(option: FeatureMentionOption, range: Range) {
     const editor = editorRef.current;
-    const trigger = mentionTrigger;
 
-    if (!editor || !trigger || isRunning) {
+    if (!editor || isRunning) {
       return;
     }
 
     editor.focus();
 
     const selection = window.getSelection();
-    const range = trigger.range.cloneRange();
 
     selection?.removeAllRanges();
     selection?.addRange(range);
@@ -738,6 +750,35 @@ export function CodexChatPanel({
     setMentionTrigger(null);
     setInput(serializeEditor(editor));
     updateEditorHeight();
+  }
+
+  useEffect(() => {
+    const editor = editorRef.current;
+
+    if (!editor || !insertMentionRequest || isRunning) {
+      return;
+    }
+
+    const baseRange = editorOwnsRange(editor, savedRangeRef.current)
+      ? savedRangeRef.current?.cloneRange()
+      : endRange(editor);
+
+    if (baseRange) {
+      insertMentionAtRange(insertMentionRequest, baseRange);
+    }
+    // requestId intentionally makes repeated requests for the same feature explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertMentionRequest?.requestId]);
+
+  function insertMention(option: FeatureMentionOption) {
+    const editor = editorRef.current;
+    const trigger = mentionTrigger;
+
+    if (!editor || !trigger || isRunning) {
+      return;
+    }
+
+    insertMentionAtRange(option, trigger.range.cloneRange());
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

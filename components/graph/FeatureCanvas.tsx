@@ -21,6 +21,18 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
+import {
+  AlertTriangle,
+  AtSign,
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  FileCode2,
+  FolderOpen,
+  MoreHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import type {
   ObservedGraphEdge,
   ObservedGraphNode,
@@ -31,6 +43,9 @@ type FeatureCanvasProps = {
   graph: ObservedGraphState;
   selectedNodeId?: string;
   onSelectNode: (id: string) => void;
+  onClearSelectedNode?: () => void;
+  onMentionNode?: (node: ObservedGraphNode) => void;
+  onAskCodexAboutNode?: (node: ObservedGraphNode) => void;
   topControls?: ReactNode;
   actionControls?: ReactNode;
   runStatusBar?: ReactNode;
@@ -266,7 +281,17 @@ function buildEdges(graph: ObservedGraphState): Edge[] {
 }
 
 function countText(viewNode: FeatureViewNode) {
-  return `${viewNode.childrenCount} children · ${viewNode.evidenceCount} evidence · ${viewNode.riskCount} risk`;
+  const fileCount = viewNode.observedNode.relatedFiles.length;
+  const primary =
+    fileCount > 0
+      ? `${fileCount} file${fileCount === 1 ? "" : "s"}`
+      : `${viewNode.childrenCount} feature${viewNode.childrenCount === 1 ? "" : "s"}`;
+  const riskText =
+    viewNode.riskCount > 0
+      ? `${viewNode.riskCount} risk${viewNode.riskCount === 1 ? "" : "s"}`
+      : "No risks";
+
+  return `${primary} · ${riskText}`;
 }
 
 function FeatureNodeCard({ data, selected }: NodeProps<CanvasNode>) {
@@ -326,8 +351,86 @@ const nodeTypes = {
   feature: FeatureNodeCard,
 };
 
-function Inspector({ node }: { node?: ObservedGraphNode }) {
+function sourceLabel(node: ObservedGraphNode) {
+  const rawSummary = node.summary?.toLowerCase() ?? "";
+
+  if (rawSummary.includes("repository scan") || rawSummary.includes("repository snapshot")) {
+    return "Imported snapshot";
+  }
+
+  if (node.rawEvents.some((event) => event.type === "node.upsert")) {
+    return "Observed graph";
+  }
+
+  return "Observed";
+}
+
+function summaryText(node: ObservedGraphNode) {
+  const summary = node.summary?.trim();
+
+  if (!summary || summary === "Imported from the current repository snapshot.") {
+    return "Observed from repository scan.";
+  }
+
+  return summary.replace(
+    "Imported from the current repository snapshot.",
+    "Observed from repository scan.",
+  );
+}
+
+function statusTone(status: FeatureBadgeStatus) {
+  return statusBadgeTone[status];
+}
+
+function Section({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="border-t border-zinc-100 px-4 py-4">
+      <h3 className="text-[13px] font-bold text-zinc-950">{title}</h3>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+function InspectorAction({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-zinc-200 bg-white px-3.5 text-xs font-bold text-zinc-800 shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:scale-100"
+    >
+      {children}
+    </button>
+  );
+}
+
+function Inspector({
+  node,
+  onAskCodex,
+  onClose,
+  onMention,
+}: {
+  node?: ObservedGraphNode;
+  onAskCodex?: (node: ObservedGraphNode) => void;
+  onClose?: () => void;
+  onMention?: (node: ObservedGraphNode) => void;
+}) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [height, setHeight] = useState(0);
 
   useLayoutEffect(() => {
@@ -351,71 +454,192 @@ function Inspector({ node }: { node?: ObservedGraphNode }) {
     observer.observe(content);
 
     return () => observer.disconnect();
-  }, [node]);
+  }, [advancedOpen, node]);
 
   if (!node) {
     return null;
   }
 
+  const status = displayStatus(node);
+  const hasRisks = node.risks.length > 0;
+  const hasFiles = node.relatedFiles.length > 0;
+  const hasEvidence = node.evidence.length > 0;
+
   return (
     <aside
-      className="pointer-events-auto absolute bottom-[250px] right-5 z-30 w-[320px] overflow-hidden rounded-[22px] border border-zinc-200 bg-white/96 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur transition-[height,opacity,transform] duration-300 ease-out"
+      className="pointer-events-auto absolute right-5 top-1/2 z-30 w-[320px] -translate-y-1/2 overflow-hidden rounded-[22px] border border-zinc-200 bg-white/96 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur transition-[height,opacity,transform] duration-300 ease-out"
       style={{ height }}
     >
       <div className="h-full overflow-y-auto">
-        <div ref={contentRef} className="p-4">
-          <div className="text-sm font-bold">{node.title}</div>
-          <div className="mt-1 text-xs font-bold text-zinc-500">
-            Status: {statusLabel[displayStatus(node)]}
-          </div>
-          {node.summary ? (
-            <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
-              {node.summary}
-            </p>
-          ) : null}
-          <div className="mt-4 grid gap-3 text-xs font-semibold text-zinc-600">
-            <div>
-              <div className="font-bold text-zinc-900">Evidence</div>
-              {node.evidence.length > 0 ? (
-                <ul className="mt-1 grid gap-1">
-                  {node.evidence.map((evidence) => (
-                    <li key={evidence.id}>{evidence.summary}</li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="mt-1 text-zinc-400">No evidence yet.</div>
-              )}
-            </div>
-            <div>
-              <div className="font-bold text-zinc-900">Risks</div>
-              {node.risks.length > 0 ? (
-                <ul className="mt-1 grid gap-1">
-                  {node.risks.map((risk) => (
-                    <li key={risk.id}>{risk.summary}</li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="mt-1 text-zinc-400">No risks observed.</div>
-              )}
-            </div>
-            {node.relatedFiles.length > 0 ? (
-              <div>
-                <div className="font-bold text-zinc-900">Related files</div>
-                <ul className="mt-1 grid gap-1">
-                  {node.relatedFiles.map((file) => (
-                    <li key={file} className="break-all">
-                      {file}
-                    </li>
-                  ))}
-                </ul>
+        <div ref={contentRef}>
+          <div className="px-4 pb-4 pt-4">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-800 shadow-sm">
+                <Sparkles className="h-4 w-4" strokeWidth={2.2} />
               </div>
-            ) : null}
-            {node.rawEvents.length > 0 ? (
-              <div>
-                <div className="font-bold text-zinc-900">Raw events</div>
-                <div className="mt-1 text-zinc-400">
-                  {node.rawEvents.length} graph events attached.
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-base font-bold leading-tight text-zinc-950">
+                    {node.title}
+                  </h2>
+                  <button
+                    type="button"
+                    aria-label="Close feature details"
+                    onClick={onClose}
+                    className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-zinc-400 transition hover:scale-[1.03] hover:bg-zinc-100 hover:text-zinc-700"
+                  >
+                    <X className="h-4 w-4" strokeWidth={2.4} />
+                  </button>
                 </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone(status)}`}
+                  >
+                    {statusLabel[status]}
+                  </span>
+                  <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-bold text-zinc-600">
+                    {sourceLabel(node)}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
+                  {summaryText(node)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Section title="Health">
+            <div className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 py-3">
+              <div
+                className={`grid h-9 w-9 place-items-center rounded-full ${
+                  hasRisks
+                    ? "bg-rose-50 text-rose-600"
+                    : "bg-emerald-50 text-emerald-600"
+                }`}
+              >
+                {hasRisks ? (
+                  <AlertTriangle className="h-4 w-4" strokeWidth={2.4} />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={2.4} />
+                )}
+              </div>
+              <div>
+                <div className="text-sm font-bold text-zinc-950">
+                  {hasRisks
+                    ? `${node.risks.length} risk${
+                        node.risks.length === 1 ? "" : "s"
+                      } need attention`
+                    : "No risks observed"}
+                </div>
+                <div className="mt-0.5 text-xs font-semibold text-zinc-500">
+                  {hasRisks
+                    ? "Review the risk detail before asking Codex to continue."
+                    : "No blocking issue is attached to this feature."}
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {hasFiles ? (
+            <Section title="Implementation">
+              <div className="grid gap-2">
+                {node.relatedFiles.map((file) => (
+                  <div
+                    key={file}
+                    className="inline-flex min-w-0 items-center gap-2 rounded-2xl bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-700 ring-1 ring-inset ring-zinc-100"
+                  >
+                    <FileCode2
+                      className="h-3.5 w-3.5 shrink-0 text-zinc-400"
+                      strokeWidth={2.2}
+                    />
+                    <code className="min-w-0 break-all font-mono text-[11px] font-semibold">
+                      {file}
+                    </code>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
+          {hasEvidence ? (
+            <Section title="Evidence">
+              <div className="grid gap-2">
+                {node.evidence.map((evidence) => (
+                  <div
+                    key={evidence.id}
+                    className="rounded-2xl bg-emerald-50/70 px-3.5 py-3 text-sm font-semibold leading-5 text-emerald-900 ring-1 ring-inset ring-emerald-100"
+                  >
+                    {evidence.summary}
+                    {evidence.path ? (
+                      <div className="mt-1 break-all font-mono text-[11px] font-semibold text-emerald-700/80">
+                        {evidence.path}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
+          {hasRisks ? (
+            <Section title="Risks">
+              <div className="grid gap-2">
+                {node.risks.map((risk) => (
+                  <div
+                    key={risk.id}
+                    className="rounded-2xl bg-rose-50/70 px-3.5 py-3 text-sm font-semibold leading-5 text-rose-900 ring-1 ring-inset ring-rose-100"
+                  >
+                    {risk.summary}
+                    <div className="mt-1 text-[11px] font-bold uppercase tracking-wide text-rose-600">
+                      {risk.severity} severity
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
+          <Section title="Actions">
+            <div className="flex flex-wrap gap-2">
+              <InspectorAction onClick={() => onMention?.(node)}>
+                <AtSign className="h-3.5 w-3.5" strokeWidth={2.4} />
+                Mention
+              </InspectorAction>
+              <InspectorAction onClick={() => onAskCodex?.(node)}>
+                <Bot className="h-3.5 w-3.5" strokeWidth={2.4} />
+                Ask Codex
+              </InspectorAction>
+              <InspectorAction disabled={!hasFiles}>
+                <FolderOpen className="h-3.5 w-3.5" strokeWidth={2.4} />
+                Open file
+              </InspectorAction>
+              <InspectorAction>
+                <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2.4} />
+              </InspectorAction>
+            </div>
+          </Section>
+
+          <div className="border-t border-zinc-100 px-4 py-4">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((current) => !current)}
+              className="flex w-full cursor-pointer items-center justify-between text-left text-[13px] font-bold text-zinc-700 transition hover:text-zinc-950"
+            >
+              <span>Advanced</span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${
+                  advancedOpen ? "rotate-180" : ""
+                }`}
+                strokeWidth={2.4}
+              />
+            </button>
+            {advancedOpen ? (
+              <div className="mt-3 rounded-2xl bg-zinc-50 px-3.5 py-3 text-xs font-semibold leading-5 text-zinc-500">
+                {node.rawEvents.length} graph event
+                {node.rawEvents.length === 1 ? "" : "s"} attached.
               </div>
             ) : null}
           </div>
@@ -427,6 +651,9 @@ function Inspector({ node }: { node?: ObservedGraphNode }) {
 
 function FeatureCanvasInner({
   graph,
+  onAskCodexAboutNode,
+  onClearSelectedNode,
+  onMentionNode,
   onSelectNode,
   topControls,
   actionControls,
@@ -447,7 +674,13 @@ function FeatureCanvasInner({
         {actionControls}
       </div>
 
-      <Inspector node={selectedNode} />
+      <Inspector
+        key={selectedNode?.id ?? "empty"}
+        node={selectedNode}
+        onAskCodex={onAskCodexAboutNode}
+        onClose={onClearSelectedNode}
+        onMention={onMentionNode}
+      />
 
       {runStatusBar || chatPanel ? (
         <div
