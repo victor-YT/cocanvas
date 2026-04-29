@@ -23,11 +23,28 @@ cocanvas is a single full-stack TypeScript app:
 
 ## Graph Update Flow
 
-- `file_change` maps changed paths to feature artifacts.
+- `file_change` maps changed paths to feature artifacts by exact path,
+  basename, artifact tokens, and feature tokens.
 - Matched features become `in_progress`.
 - Unmapped file changes create `drift` nodes.
 - Passing test commands mark related features `verified`.
 - Failing commands mark related features `risk`.
+- Command events can infer related features from `featureIds`, paths, command
+  text, title, and detail.
+- Acceptance criteria are updated only when event text overlaps distinctive
+  criterion terms, which avoids marking generic `reset token` criteria as
+  verified too early.
+
+## API Route Contracts
+
+- `POST /api/parse-prd` returns `{ parsed, graph }`.
+- `POST /api/scan-repo` returns `{ repoPath, scannedAt, artifacts }`.
+- `POST /api/codex/start` returns `{ taskId, mode, repoPath, prompt, events, graphAfterReplay }`.
+- `GET /api/events` returns `{ mode, events }`.
+
+The scanner is intentionally lightweight. It walks a bounded number of files,
+ignores build and dependency folders, and classifies artifacts by simple path
+heuristics.
 
 ## Adapter Strategy
 

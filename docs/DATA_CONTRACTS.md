@@ -57,6 +57,61 @@ type CodexTimelineEvent = {
 }
 ```
 
+## API Responses
+
+`POST /api/parse-prd`
+
+```json
+{
+  "parsed": {
+    "title": "Password Reset",
+    "sourceText": "Password Reset\n- Reset token cannot be reused.",
+    "features": []
+  },
+  "graph": {
+    "features": [],
+    "edges": [],
+    "timeline": []
+  }
+}
+```
+
+`POST /api/scan-repo`
+
+```json
+{
+  "repoPath": ".",
+  "scannedAt": "2026-04-29T01:00:00.000Z",
+  "artifacts": [
+    {
+      "id": "artifact-src-auth-reset-token-ts",
+      "path": "src/auth/reset-token.ts",
+      "kind": "service",
+      "role": "Business logic",
+      "confidence": 0.62,
+      "evidence": "Detected by lightweight repository scan."
+    }
+  ]
+}
+```
+
+`POST /api/codex/start`
+
+```json
+{
+  "taskId": "uuid",
+  "mode": "mock",
+  "repoPath": ".",
+  "prompt": "Add protection so reset tokens cannot be reused.",
+  "events": [],
+  "graphAfterReplay": {
+    "features": [],
+    "edges": [],
+    "timeline": []
+  }
+}
+```
+
 ```json
 {
   "id": "feature-password-reset",
