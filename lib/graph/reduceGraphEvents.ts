@@ -100,6 +100,10 @@ function upsertNode(
 }
 
 function upsertEdge(edges: ObservedGraphEdge[], edge: ObservedGraphEdge) {
+  if (edge.relation !== "contains") {
+    return;
+  }
+
   const existing = edges.find((item) => item.id === edge.id);
 
   if (existing) {
@@ -110,18 +114,14 @@ function upsertEdge(edges: ObservedGraphEdge[], edge: ObservedGraphEdge) {
   edges.push(edge);
 }
 
-function evidenceNodeId(evidenceId: string) {
-  return `evidence_${evidenceId}`;
-}
-
-function riskNodeId(riskId: string) {
-  return `risk_${riskId}`;
-}
-
 function addRelatedFile(node: ObservedGraphNode, path?: string) {
   if (path && !node.relatedFiles.includes(path)) {
     node.relatedFiles.push(path);
   }
+}
+
+function isCanvasFeatureNode(nodeType: string) {
+  return nodeType !== "evidence" && nodeType !== "risk";
 }
 
 export function reduceGraphEvents(events: GraphEvent[]): ObservedGraphState {
@@ -131,6 +131,10 @@ export function reduceGraphEvents(events: GraphEvent[]): ObservedGraphState {
     state.timeline = [eventTimelineItem(event, index), ...state.timeline];
 
     if (event.type === "node.upsert") {
+      if (!isCanvasFeatureNode(event.node.nodeType)) {
+        return;
+      }
+
       upsertNode(state.nodes, {
         id: event.node.id,
         nodeType: event.node.nodeType,
@@ -166,25 +170,6 @@ export function reduceGraphEvents(events: GraphEvent[]): ObservedGraphState {
     if (event.type === "evidence.add") {
       upsertNode(state.nodes, { id: event.targetId });
       const target = state.nodes.find((node) => node.id === event.targetId);
-      const nodeId = evidenceNodeId(event.evidence.id);
-
-      upsertNode(state.nodes, {
-        id: nodeId,
-        nodeType: "evidence",
-        title: event.evidence.summary,
-        status: "verified",
-        summary: event.evidence.path,
-        evidence: [event.evidence],
-        relatedFiles: event.evidence.path ? [event.evidence.path] : [],
-        rawEvents: [event],
-      });
-      upsertEdge(state.edges, {
-        id: `${nodeId}_supports_${event.targetId}`,
-        from: nodeId,
-        to: event.targetId,
-        relation: "supports",
-        label: "supports",
-      });
 
       if (target) {
         target.evidence.push(event.evidence);
@@ -198,25 +183,6 @@ export function reduceGraphEvents(events: GraphEvent[]): ObservedGraphState {
     if (event.type === "risk.add") {
       upsertNode(state.nodes, { id: event.targetId });
       const target = state.nodes.find((node) => node.id === event.targetId);
-      const nodeId = riskNodeId(event.risk.id);
-
-      upsertNode(state.nodes, {
-        id: nodeId,
-        nodeType: "risk",
-        title: event.risk.summary,
-        status: "risk",
-        summary: `Severity: ${event.risk.severity}`,
-        risks: [event.risk],
-        relatedFiles: event.risk.path ? [event.risk.path] : [],
-        rawEvents: [event],
-      });
-      upsertEdge(state.edges, {
-        id: `${nodeId}_blocks_${event.targetId}`,
-        from: nodeId,
-        to: event.targetId,
-        relation: "blocks",
-        label: "blocks",
-      });
 
       if (target) {
         target.status = "risk";

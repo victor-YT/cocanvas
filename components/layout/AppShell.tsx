@@ -7,10 +7,13 @@ import type { GraphEvent } from "@/lib/types/observedGraph";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
 import {
   CodexChatPanel,
-  type CodexChatMessage,
   type CodexFunctionId,
   type CodexRunOptions,
 } from "@/components/codex/CodexChatPanel";
+import {
+  CodexRunStatusBar,
+  type CodexRunStatus,
+} from "@/components/codex/CodexRunStatusBar";
 
 const nodeReplayDelayMs = 1000;
 const updateReplayDelayMs = 180;
@@ -42,6 +45,73 @@ const functionPrompts: Record<CodexFunctionId, string> = {
   scope: "Check whether the work stayed inside the current run scope.",
 };
 
+const quickActionPhase: Partial<
+  Record<CodexFunctionId, { status: CodexRunStatus; phase: string; message: string }>
+> = {
+  plan: {
+    status: "working",
+    phase: "Planning",
+    message: "Asking Codex for the next implementation plan.",
+  },
+  test: {
+    status: "testing",
+    phase: "Running tests",
+    message: "Asking Codex to generate and run the relevant tests.",
+  },
+  review: {
+    status: "working",
+    phase: "Reviewing changes",
+    message: "Asking Codex to inspect evidence and risk.",
+  },
+};
+
+function formatElapsed(ms: number) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+}
+
+function replayStatusForEvent(event: (typeof mockGraphEvents)[number]) {
+  if (event.type === "node.upsert") {
+    return {
+      phase: "Observing features",
+      message: `Added ${event.node.title}.`,
+    };
+  }
+
+  if (event.type === "edge.upsert") {
+    return {
+      phase: "Linking hierarchy",
+      message: "Connected parent and child features.",
+    };
+  }
+
+  if (event.type === "evidence.add") {
+    return {
+      phase: "Attaching evidence",
+      message: event.evidence.summary,
+    };
+  }
+
+  if (event.type === "risk.add") {
+    return {
+      phase: "Tracking risk",
+      message: event.risk.summary,
+    };
+  }
+
+  return {
+    phase: "Updating status",
+    message: event.summary ?? "Updated the feature map.",
+  };
+}
+
 export function AppShell() {
   const {
     graph,
@@ -54,13 +124,11 @@ export function AppShell() {
   const [mounted, setMounted] = useState(false);
   const [repoPath, setRepoPath] = useState("Loading repo...");
   const [chatDraft, setChatDraft] = useState("");
-  const [chatMessages, setChatMessages] = useState<CodexChatMessage[]>([
-    {
-      id: "codex-welcome",
-      role: "codex",
-      text: "Ask Codex to build, test, review, or explain the observed feature graph.",
-    },
-  ]);
+  const [runStatus, setRunStatus] = useState<CodexRunStatus>("idle");
+  const [runPhase, setRunPhase] = useState("Ready");
+  const [runMessage, setRunMessage] = useState("Choose a repo, then ask Codex what to build.");
+  const [runStartedAt, setRunStartedAt] = useState<number>();
+  const [elapsed, setElapsed] = useState("0s");
 
   const selectedNode = graph.nodes.find(
     (node) => node.id === graph.selectedNodeId,
@@ -85,53 +153,73 @@ export function AppShell() {
     void loadCurrentRepo();
   }, []);
 
+  useEffect(() => {
+    if (!runStartedAt || (runStatus !== "working" && runStatus !== "testing")) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setElapsed(formatElapsed(Date.now() - runStartedAt));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [runStartedAt, runStatus]);
+
   async function runDemoReplay() {
     setIsReplaying(true);
+    setRunStatus("working");
+    setRunPhase("Demo replay");
+    setRunMessage("Appending observed feature events.");
+    setRunStartedAt(Date.now());
+    setElapsed("0s");
     resetCanvas();
 
     for (const event of mockGraphEvents) {
       await wait(replayDelayForEvent(event));
+      const nextStatus = replayStatusForEvent(event);
+      setRunPhase(nextStatus.phase);
+      setRunMessage(nextStatus.message);
       applyGraphEvent(event);
     }
 
     setIsReplaying(false);
+    setRunStatus("completed");
+    setRunPhase("Completed");
+    setRunMessage(`${mockGraphEvents.length} graph events applied.`);
+    setRunStartedAt(undefined);
   }
 
   function handleResetCanvas() {
     resetCanvas();
-  }
-
-  function appendChatMessage(message: Omit<CodexChatMessage, "id">) {
-    setChatMessages((current) => [
-      ...current,
-      {
-        ...message,
-        id: `chat-${Date.now()}-${current.length}`,
-      },
-    ]);
-  }
-
-  function describeOptions(options: CodexRunOptions) {
-    return options.model === "auto" ? "the default Codex model" : options.model;
+    setRunStatus("idle");
+    setRunPhase("Ready");
+    setRunMessage("Choose a repo, then ask Codex what to build.");
+    setRunStartedAt(undefined);
   }
 
   function modelForCodex(options: CodexRunOptions) {
     return options.model === "auto" ? undefined : options.model;
   }
 
-  async function startCodexTask(prompt: string, options: CodexRunOptions) {
+  async function startCodexTask(
+    prompt: string,
+    options: CodexRunOptions,
+    runIntent?: {
+      status?: CodexRunStatus;
+      phase?: string;
+      message?: string;
+    },
+  ) {
     if (!prompt) {
       return;
     }
 
-    appendChatMessage({ role: "user", text: prompt });
-    appendChatMessage({
-      role: "codex",
-      text: selectedNode
-        ? `Queued for ${selectedNode.title} with ${describeOptions(options)}.`
-        : `Queued for the observed graph with ${describeOptions(options)}.`,
-    });
     setIsCodexRunning(true);
+    setRunStatus(runIntent?.status ?? "working");
+    setRunPhase(runIntent?.phase ?? "Working");
+    setRunMessage(runIntent?.message ?? "Sending the task to Codex App Server.");
+    setRunStartedAt(Date.now());
+    setElapsed("0s");
     setChatDraft("");
 
     try {
@@ -157,31 +245,34 @@ export function AppShell() {
       }
 
       data.graphEvents?.forEach((event) => applyGraphEvent(event));
-      appendChatMessage({
-        role: "codex",
-        text: data.assistantText?.trim() || "Codex completed the task.",
-      });
+      setRunStatus("completed");
+      setRunPhase("Completed");
+      setRunMessage(`${data.graphEvents?.length ?? 0} graph events applied.`);
     } catch (error) {
-      appendChatMessage({
-        role: "codex",
-        text: error instanceof Error ? error.message : "Codex task failed.",
-      });
+      setRunStatus("failed");
+      setRunPhase("Needs attention");
+      setRunMessage(error instanceof Error ? error.message : "Codex task failed.");
     } finally {
       setIsCodexRunning(false);
+      setRunStartedAt(undefined);
     }
   }
 
   function submitCodexChat(options: CodexRunOptions) {
     const prompt = chatDraft.trim();
 
-    void startCodexTask(prompt, options);
+    void startCodexTask(prompt, options, {
+      status: "working",
+      phase: "Working",
+      message: "Running your request in the selected repo.",
+    });
   }
 
   function runCodexFunction(id: CodexFunctionId, options: CodexRunOptions) {
     const target = selectedNode?.title ?? "the observed graph";
     const prompt = `${functionPrompts[id]} Target: ${target}.`;
 
-    void startCodexTask(prompt, options);
+    void startCodexTask(prompt, options, quickActionPhase[id]);
   }
 
   async function selectRepo() {
@@ -198,6 +289,10 @@ export function AppShell() {
 
       setRepoPath(data.repoPath);
       resetCanvas();
+      setRunStatus("idle");
+      setRunPhase("Ready");
+      setRunMessage("Repository selected. Ask Codex what to build.");
+      setRunStartedAt(undefined);
     } catch (error) {
       console.error(error);
     }
@@ -263,13 +358,19 @@ export function AppShell() {
           }
           chatPanel={
             <CodexChatPanel
-              selectedNode={selectedNode}
-              messages={chatMessages}
               draft={chatDraft}
               isRunning={isReplaying || isCodexRunning}
               onDraftChange={setChatDraft}
               onSubmit={submitCodexChat}
               onRunFunction={runCodexFunction}
+            />
+          }
+          runStatusBar={
+            <CodexRunStatusBar
+              status={runStatus}
+              phase={runPhase}
+              message={runMessage}
+              elapsed={elapsed}
             />
           }
         />

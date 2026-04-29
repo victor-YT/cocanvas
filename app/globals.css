@@ -30,6 +30,13 @@ textarea {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 button,
 [role="button"],
 .react-flow__node,
@@ -71,6 +78,37 @@ button:disabled {
 .cocanvas-working-dot {
   animation: cocanvas-working-pulse 1.7s ease-in-out infinite;
   box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.42);
+}
+
+.cocanvas-run-status-active::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(16, 185, 129, 0.05) 32%,
+    rgba(16, 185, 129, 0.16) 48%,
+    rgba(59, 130, 246, 0.08) 58%,
+    transparent 74%
+  );
+  transform: translateX(-100%);
+  animation: cocanvas-run-status-shimmer 2.8s ease-in-out infinite;
+}
+
+.cocanvas-run-status-active::after {
+  position: absolute;
+  right: 24px;
+  bottom: 0;
+  left: 24px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(16, 185, 129, 0.36),
+    transparent
+  );
 }
 
 .cocanvas-flow-controls {
@@ -135,5 +173,16 @@ button:disabled {
     opacity: 0.72;
     transform: scale(0.9);
     box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
+}
+
+@keyframes cocanvas-run-status-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  58%,
+  100% {
+    transform: translateX(100%);
   }
 }

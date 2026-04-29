@@ -22,8 +22,6 @@ const nodeTypes: ObservedNodeType[] = [
   "feature",
   "flow",
   "capability",
-  "evidence",
-  "risk",
   "cluster",
 ];
 
@@ -37,31 +35,25 @@ const nodeStatuses: ObservedNodeStatus[] = [
   "unlinked",
 ];
 
-const edgeRelations: ObservedEdgeRelation[] = [
-  "contains",
-  "supports",
-  "blocks",
-  "enables",
-  "related",
-];
+const edgeRelations: ObservedEdgeRelation[] = ["contains"];
 
 const observerInstructions = `
 You are the cocanvas observer.
 
 Convert a completed Codex run into append-only cocanvas GraphEvent JSON.
 
-cocanvas draws the Observed Feature Graph: what Codex actually built, not what
-the user hoped it would build. The user prompt is context, but graph nodes must
-come from observed Codex actions, files, commands, diffs, tests, and messages.
+cocanvas draws a Feature Map: what product features Codex actually built, not
+what the user hoped it would build. The user prompt is context, but visible
+feature nodes must come from observed Codex actions, files, diffs, tests, and
+messages.
 
 Rules:
 - Return only valid JSON matching the schema.
-- Prefer one primary feature node for the main product area Codex worked on.
-- Use flow nodes for user-visible steps.
-- Use capability nodes for implementation or system parts.
-- Use cluster nodes for unrelated or unclear extra work.
-- Add contains edges from feature to each flow/capability part.
-- Add enables or related edges only when the raw events clearly support them.
+- Model every visible product thing as a feature in the canvas.
+- Use node.upsert with nodeType feature, flow, capability, or cluster only.
+- Do not create node.upsert events with nodeType evidence or risk.
+- Use contains edges for parent feature -> child feature only.
+- Do not output supports, blocks, enables, or related edges for the main canvas.
 - Add evidence.add for observed files, diffs, plans, commands, or passing tests.
 - Add risk.add for failed commands, missing verification, scope drift, or unclear implementation.
 - Use status.update to mark verified or risk when evidence supports it.

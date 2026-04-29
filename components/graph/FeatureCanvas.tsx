@@ -16,12 +16,10 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { Boxes, Layers, Route, type LucideIcon } from "lucide-react";
 import type {
   ObservedGraphEdge,
   ObservedGraphNode,
   ObservedGraphState,
-  ObservedNodeStatus,
 } from "@/lib/types/observedGraph";
 
 type FeatureCanvasProps = {
@@ -30,188 +28,58 @@ type FeatureCanvasProps = {
   onSelectNode: (id: string) => void;
   topControls?: ReactNode;
   actionControls?: ReactNode;
+  runStatusBar?: ReactNode;
   chatPanel?: ReactNode;
 };
 
-type CanvasNodeKind = "feature" | "part" | "unlinked";
-
 type FeatureViewNode = {
-  id: string;
   observedNode: ObservedGraphNode;
-  kind: CanvasNodeKind;
-  label: string;
-  status: ObservedNodeStatus;
+  status: FeatureBadgeStatus;
+  childrenCount: number;
   evidenceCount: number;
   riskCount: number;
-  partCount: number;
-  verifiedPartCount: number;
-  riskyPartCount: number;
-};
-
-type FeatureViewModel = {
-  nodes: CanvasNode[];
-  edges: Edge[];
 };
 
 type CanvasNodeData = {
   viewNode: FeatureViewNode;
 };
 
-type CanvasNode = Node<CanvasNodeData, "observed">;
+type CanvasNode = Node<CanvasNodeData, "feature">;
 
-type NodeTone = {
-  border: string;
-  accent: string;
-  icon: string;
-  ring: string;
-  shadow: string;
-  Icon: LucideIcon;
+type FeatureBadgeStatus = "building" | "implemented" | "verified" | "risk";
+
+type HierarchyNode = {
+  node: ObservedGraphNode;
+  depth: number;
+  children: HierarchyNode[];
 };
 
-const statusLabel: Record<ObservedNodeStatus, string> = {
-  planned: "Planned",
+const statusLabel: Record<FeatureBadgeStatus, string> = {
   building: "Building",
   implemented: "Implemented",
-  needs_evidence: "Needs evidence",
   verified: "Verified",
   risk: "Risk",
-  unlinked: "Unlinked",
 };
 
-const statusBadgeTone: Record<ObservedNodeStatus, string> = {
-  planned: "bg-zinc-100 text-zinc-600",
+const statusBadgeTone: Record<FeatureBadgeStatus, string> = {
   building: "bg-emerald-50 text-emerald-700",
   implemented: "bg-blue-50 text-blue-700",
-  needs_evidence: "bg-zinc-100 text-zinc-700",
   verified: "bg-emerald-50 text-emerald-700",
   risk: "bg-rose-50 text-rose-700",
-  unlinked: "bg-violet-50 text-violet-700",
 };
 
-const nodeTone: Record<CanvasNodeKind, NodeTone> = {
-  feature: {
-    border: "border-amber-300/70",
-    accent: "bg-amber-400",
-    icon: "bg-amber-50 text-amber-600",
-    ring: "ring-amber-300/70",
-    shadow: "shadow-[0_16px_38px_rgba(245,158,11,0.13)]",
-    Icon: Layers,
-  },
-  part: {
-    border: "border-blue-300/70",
-    accent: "bg-blue-400",
-    icon: "bg-blue-50 text-blue-600",
-    ring: "ring-blue-300/70",
-    shadow: "shadow-[0_14px_34px_rgba(59,130,246,0.12)]",
-    Icon: Route,
-  },
-  unlinked: {
-    border: "border-purple-300/70",
-    accent: "bg-purple-400",
-    icon: "bg-purple-50 text-purple-600",
-    ring: "ring-purple-300/70",
-    shadow: "shadow-[0_14px_34px_rgba(168,85,247,0.12)]",
-    Icon: Boxes,
-  },
-};
-
-const nodeSizeClass: Record<CanvasNodeKind, string> = {
-  feature: "w-[320px] min-h-[158px]",
-  part: "w-[330px] min-h-[136px]",
-  unlinked: "w-[300px] min-h-[130px]",
-};
-
-const NODE_SIZE: Record<CanvasNodeKind, { width: number; height: number }> = {
-  feature: { width: 320, height: 158 },
-  part: { width: 330, height: 136 },
-  unlinked: { width: 300, height: 130 },
-};
-
-const COLUMN_X = {
-  feature: 120,
-  part: 520,
-  unlinked: 980,
-};
-
+const MIN_NODE_HEIGHT = 112;
+const COLUMN_GAP = 390;
+const ROW_GAP = 34;
+const ROOT_GAP = 92;
+const CANVAS_LEFT = 120;
 const CANVAS_TOP = 170;
-const PART_GAP = 34;
-const GROUP_GAP = 96;
-const UNLINKED_GAP = 44;
 
-function isFeatureNode(node: ObservedGraphNode) {
-  return node.nodeType === "feature";
+function isVisibleFeatureNode(node: ObservedGraphNode) {
+  return node.nodeType !== "evidence" && node.nodeType !== "risk";
 }
 
-function isPartNode(node: ObservedGraphNode) {
-  return node.nodeType === "flow" || node.nodeType === "capability";
-}
-
-function isUnlinkedNode(node: ObservedGraphNode) {
-  return node.nodeType === "cluster";
-}
-
-function visibleProductNodes(nodes: ObservedGraphNode[]) {
-  return nodes.filter(
-    (node) => isFeatureNode(node) || isPartNode(node) || isUnlinkedNode(node),
-  );
-}
-
-function parentFeatureForPart(
-  part: ObservedGraphNode,
-  features: ObservedGraphNode[],
-  productNodesById: Map<string, ObservedGraphNode>,
-  incomingEdgesByTarget: Map<string, ObservedGraphEdge[]>,
-) {
-  const visited = new Set<string>();
-  const queue = [part.id];
-
-  while (queue.length > 0) {
-    const currentId = queue.shift();
-
-    if (!currentId || visited.has(currentId)) {
-      continue;
-    }
-
-    visited.add(currentId);
-
-    for (const edge of incomingEdgesByTarget.get(currentId) ?? []) {
-      const source = productNodesById.get(edge.from);
-
-      if (!source) {
-        continue;
-      }
-
-      if (isFeatureNode(source)) {
-        return source;
-      }
-
-      if (isPartNode(source)) {
-        queue.push(source.id);
-      }
-    }
-  }
-
-  return features[0];
-}
-
-function edgeMapByTarget(edges: ObservedGraphEdge[]) {
-  const incomingEdgesByTarget = new Map<string, ObservedGraphEdge[]>();
-
-  edges.forEach((edge) => {
-    if (edge.relation === "supports" || edge.relation === "blocks") {
-      return;
-    }
-
-    incomingEdgesByTarget.set(edge.to, [
-      ...(incomingEdgesByTarget.get(edge.to) ?? []),
-      edge,
-    ]);
-  });
-
-  return incomingEdgesByTarget;
-}
-
-function statusForPart(node: ObservedGraphNode) {
+function displayStatus(node: ObservedGraphNode): FeatureBadgeStatus {
   if (node.risks.length > 0 || node.status === "risk") {
     return "risk";
   }
@@ -228,183 +96,180 @@ function statusForPart(node: ObservedGraphNode) {
     return "implemented";
   }
 
-  return node.status;
+  return "implemented";
 }
 
-function featureSummary(
-  parts: ObservedGraphNode[],
-  clusters: ObservedGraphNode[],
-) {
-  const verifiedPartCount = parts.filter(
-    (part) => statusForPart(part) === "verified",
-  ).length;
-  const riskyPartCount = parts.filter(
-    (part) => statusForPart(part) === "risk",
-  ).length;
+function nodeHeight(node: ObservedGraphNode) {
+  const titleLines = Math.max(1, Math.ceil(node.title.length / 28));
 
-  return {
-    partCount: parts.length,
-    verifiedPartCount,
-    riskyPartCount,
-    clusterCount: clusters.length,
-  };
+  return MIN_NODE_HEIGHT + (titleLines - 1) * 22;
 }
 
-function toViewNode(
-  node: ObservedGraphNode,
-  kind: CanvasNodeKind,
-  summary: Partial<FeatureViewNode> = {},
-): FeatureViewNode {
-  return {
-    id: node.id,
-    observedNode: node,
-    kind,
-    label:
-      kind === "feature" ? "Feature" : kind === "unlinked" ? "Unlinked" : "Part",
-    status: kind === "part" ? statusForPart(node) : node.status,
-    evidenceCount: node.evidence.length,
-    riskCount: node.risks.length,
-    partCount: 0,
-    verifiedPartCount: 0,
-    riskyPartCount: 0,
-    ...summary,
-  };
+function containsEdges(edges: ObservedGraphEdge[], nodeIds: Set<string>) {
+  return edges.filter(
+    (edge) =>
+      edge.relation === "contains" &&
+      nodeIds.has(edge.from) &&
+      nodeIds.has(edge.to),
+  );
 }
 
-function buildFeatureViewModel(graph: ObservedGraphState): FeatureViewModel {
-  const productNodes = visibleProductNodes(graph.nodes);
-  const features = productNodes.filter(isFeatureNode);
-  const parts = productNodes.filter(isPartNode);
-  const clusters = productNodes.filter(isUnlinkedNode);
-  const productNodesById = new Map(productNodes.map((node) => [node.id, node]));
-  const incomingEdgesByTarget = edgeMapByTarget(graph.edges);
-  const partsByFeatureId = new Map<string, ObservedGraphNode[]>();
+function buildHierarchy(nodes: ObservedGraphNode[], edges: ObservedGraphEdge[]) {
+  const visibleNodes = nodes.filter(isVisibleFeatureNode);
+  const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+  const edgesByParent = new Map<string, ObservedGraphEdge[]>();
+  const childIds = new Set<string>();
 
-  parts.forEach((part) => {
-    const feature = parentFeatureForPart(
-      part,
-      features,
-      productNodesById,
-      incomingEdgesByTarget,
-    );
-
-    if (!feature) {
-      return;
-    }
-
-    partsByFeatureId.set(feature.id, [
-      ...(partsByFeatureId.get(feature.id) ?? []),
-      part,
-    ]);
+  containsEdges(edges, visibleNodeIds).forEach((edge) => {
+    edgesByParent.set(edge.from, [...(edgesByParent.get(edge.from) ?? []), edge]);
+    childIds.add(edge.to);
   });
 
-  const nodes: CanvasNode[] = [];
+  const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
+  const roots = visibleNodes.filter((node) => !childIds.has(node.id));
+
+  function visit(node: ObservedGraphNode, depth: number, path: Set<string>): HierarchyNode {
+    const childEdges = edgesByParent.get(node.id) ?? [];
+    const children = childEdges
+      .map((edge) => nodesById.get(edge.to))
+      .filter((child): child is ObservedGraphNode => Boolean(child))
+      .filter((child) => !path.has(child.id))
+      .map((child) => visit(child, depth + 1, new Set([...path, child.id])));
+
+    return {
+      node,
+      depth,
+      children,
+    };
+  }
+
+  return roots.map((root) => visit(root, 0, new Set([root.id])));
+}
+
+function subtreeHeight(tree: HierarchyNode): number {
+  const ownHeight = nodeHeight(tree.node);
+
+  if (tree.children.length === 0) {
+    return ownHeight;
+  }
+
+  const childHeight =
+    tree.children.reduce((height, child) => height + subtreeHeight(child), 0) +
+    Math.max(tree.children.length - 1, 0) * ROW_GAP;
+
+  return Math.max(ownHeight, childHeight);
+}
+
+function layoutHierarchy(graph: ObservedGraphState) {
+  const roots = buildHierarchy(graph.nodes, graph.edges);
+  const positions = new Map<string, { x: number; y: number }>();
+  const childCountById = new Map<string, number>();
   const edges: Edge[] = [];
   let cursorY = CANVAS_TOP;
 
-  features.forEach((feature) => {
-    const featureParts = partsByFeatureId.get(feature.id) ?? [];
-    const summary = featureSummary(featureParts, clusters);
-    const partsHeight =
-      featureParts.length * NODE_SIZE.part.height +
-      Math.max(featureParts.length - 1, 0) * PART_GAP;
-    const groupHeight = Math.max(NODE_SIZE.feature.height, partsHeight);
-    const featureY = cursorY + groupHeight / 2 - NODE_SIZE.feature.height / 2;
-    const partStartY = cursorY + groupHeight / 2 - partsHeight / 2;
-    const featureViewNode = toViewNode(feature, "feature", summary);
+  function place(tree: HierarchyNode, top: number): void {
+    const height = subtreeHeight(tree);
+    const ownHeight = nodeHeight(tree.node);
+    const x = CANVAS_LEFT + tree.depth * COLUMN_GAP;
 
-    nodes.push({
-      id: feature.id,
-      type: "observed",
-      data: { viewNode: featureViewNode },
-      position: { x: COLUMN_X.feature, y: featureY },
-      selected: graph.selectedNodeId === feature.id,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    });
+    childCountById.set(tree.node.id, tree.children.length);
 
-    featureParts.forEach((part, index) => {
-      const partViewNode = toViewNode(part, "part");
-
-      nodes.push({
-        id: part.id,
-        type: "observed",
-        data: { viewNode: partViewNode },
-        position: {
-          x: COLUMN_X.part,
-          y: partStartY + index * (NODE_SIZE.part.height + PART_GAP),
-        },
-        selected: graph.selectedNodeId === part.id,
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+    if (tree.children.length === 0) {
+      positions.set(tree.node.id, {
+        x,
+        y: top,
       });
+      return;
+    }
+
+    const childrenHeight =
+      tree.children.reduce((total, child) => total + subtreeHeight(child), 0) +
+      Math.max(tree.children.length - 1, 0) * ROW_GAP;
+    let childTop = top + height / 2 - childrenHeight / 2;
+
+    tree.children.forEach((child) => {
+      place(child, childTop);
+      childTop += subtreeHeight(child) + ROW_GAP;
       edges.push({
-        id: `feature_part_${feature.id}_${part.id}`,
-        source: feature.id,
-        target: part.id,
+        id: `contains_${tree.node.id}_${child.node.id}`,
+        source: tree.node.id,
+        target: child.node.id,
         type: "smoothstep",
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: "#d4d4d8",
+          color: "#c7c9cf",
           width: 16,
           height: 16,
         },
-        style: { stroke: "#d4d4d8", strokeWidth: 2.2 },
+        style: { stroke: "#c7c9cf", strokeWidth: 2.2 },
       });
     });
 
-    cursorY += groupHeight + GROUP_GAP;
-  });
-
-  clusters.forEach((cluster, index) => {
-    nodes.push({
-      id: cluster.id,
-      type: "observed",
-      data: { viewNode: toViewNode(cluster, "unlinked") },
-      position: {
-        x: COLUMN_X.unlinked,
-        y: CANVAS_TOP + index * (NODE_SIZE.unlinked.height + UNLINKED_GAP),
-      },
-      selected: graph.selectedNodeId === cluster.id,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+    positions.set(tree.node.id, {
+      x,
+      y: top + height / 2 - ownHeight / 2,
     });
+  }
+
+  roots.forEach((root) => {
+    place(root, cursorY);
+    cursorY += subtreeHeight(root) + ROOT_GAP;
   });
 
   return {
-    nodes,
+    positions,
+    childCountById,
     edges,
   };
 }
 
-function detailSummary(viewNode: FeatureViewNode) {
-  if (viewNode.kind === "feature") {
-    return `${viewNode.partCount} parts · ${viewNode.verifiedPartCount} verified · ${viewNode.riskyPartCount} risks`;
-  }
+function buildNodes(graph: ObservedGraphState): CanvasNode[] {
+  const layout = layoutHierarchy(graph);
 
-  if (viewNode.kind === "part") {
-    return `${viewNode.evidenceCount} evidence · ${viewNode.riskCount} risk`;
-  }
+  return graph.nodes
+    .filter(isVisibleFeatureNode)
+    .map((node) => {
+      const viewNode: FeatureViewNode = {
+        observedNode: node,
+        status: displayStatus(node),
+        childrenCount: layout.childCountById.get(node.id) ?? 0,
+        evidenceCount: node.evidence.length,
+        riskCount: node.risks.length,
+      };
 
-  return "Unlinked product area";
+      return {
+        id: node.id,
+        type: "feature",
+        data: { viewNode },
+        position: layout.positions.get(node.id) ?? { x: CANVAS_LEFT, y: CANVAS_TOP },
+        selected: graph.selectedNodeId === node.id,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+      };
+    });
 }
 
-function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
+function buildEdges(graph: ObservedGraphState): Edge[] {
+  return layoutHierarchy(graph).edges;
+}
+
+function countText(viewNode: FeatureViewNode) {
+  return `${viewNode.childrenCount} children · ${viewNode.evidenceCount} evidence · ${viewNode.riskCount} risk`;
+}
+
+function FeatureNodeCard({ data, selected }: NodeProps<CanvasNode>) {
   const viewNode = data.viewNode;
   const node = viewNode.observedNode;
-  const tone = nodeTone[viewNode.kind];
-  const Icon = tone.Icon;
-  const label = statusLabel[viewNode.status];
-  const badgeTone = statusBadgeTone[viewNode.status];
-  const isFeature = viewNode.kind === "feature";
+  const status = viewNode.status;
 
   return (
     <div
-      className={`group cocanvas-node relative ${nodeSizeClass[viewNode.kind]} cursor-pointer overflow-visible rounded-[18px] border bg-white text-left text-zinc-900 ${tone.border} ${tone.shadow} px-[18px] py-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(24,24,27,0.13)] ${
-        selected ? `ring-2 ${tone.ring} ring-offset-2` : ""
+      className={`group cocanvas-node relative w-[300px] cursor-pointer overflow-visible rounded-[18px] border border-zinc-200 bg-white px-5 py-4 text-left text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_16px_38px_rgba(24,24,27,0.12)] ${
+        selected ? "ring-2 ring-zinc-300 ring-offset-2" : ""
       }`}
       role="button"
       tabIndex={0}
+      style={{ minHeight: nodeHeight(node) }}
     >
       <Handle
         type="target"
@@ -418,71 +283,119 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
       />
       <span
         aria-hidden="true"
-        className={`absolute bottom-3 left-3 top-3 w-1 rounded-full ${tone.accent}`}
+        className="absolute bottom-3 left-3 top-3 w-1 rounded-full bg-zinc-200"
       />
-      {viewNode.status === "building" ? (
+      {status === "building" ? (
         <span
           aria-label="Working"
           className="cocanvas-working-dot absolute right-4 top-4 h-3.5 w-3.5 rounded-full bg-emerald-400"
         />
       ) : null}
-      <div className="flex items-start gap-3.5 pl-2">
-        <div
-          className={`grid shrink-0 place-items-center rounded-xl ${tone.icon} ${
-            isFeature ? "h-12 w-12" : "h-11 w-11"
-          }`}
-        >
-          <Icon className={isFeature ? "h-6 w-6" : "h-[22px] w-[22px]"} strokeWidth={2.2} />
+      <div className="pl-2 pr-4">
+        <div className="text-[17px] font-bold leading-snug tracking-normal">
+          {node.title}
         </div>
-        <div className="min-w-0 flex-1 pr-5">
-          <div
-            className={`font-bold leading-snug tracking-normal ${
-              isFeature ? "text-[19px]" : "text-[17px]"
-            }`}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusBadgeTone[status]}`}
           >
-            {node.title}
-          </div>
-          <div className="mt-1 text-[11px] font-bold uppercase text-zinc-500">
-            {viewNode.label}
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${badgeTone}`}
-            >
-              {label}
-            </span>
-            <span className="text-[12px] font-bold text-zinc-500">
-              {detailSummary(viewNode)}
-            </span>
-          </div>
+            {statusLabel[status]}
+          </span>
+          <span className="text-[12px] font-bold text-zinc-500">
+            {countText(viewNode)}
+          </span>
         </div>
       </div>
-      {node.summary ? (
-        <div className="pointer-events-none absolute left-0 top-[calc(100%+10px)] z-50 hidden w-[280px] rounded-2xl border border-zinc-200 bg-white/98 px-4 py-3 text-sm font-bold leading-5 text-zinc-700 shadow-[0_16px_42px_rgba(24,24,27,0.14)] group-hover:block">
-          {node.summary}
-        </div>
-      ) : null}
     </div>
   );
 }
 
 const nodeTypes = {
-  observed: ObservedNodeCard,
+  feature: FeatureNodeCard,
 };
+
+function Inspector({ node }: { node?: ObservedGraphNode }) {
+  if (!node) {
+    return null;
+  }
+
+  return (
+    <aside className="pointer-events-auto absolute bottom-[236px] right-5 z-30 w-[320px] rounded-[22px] border border-zinc-200 bg-white/96 p-4 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur">
+      <div className="text-sm font-bold">{node.title}</div>
+      <div className="mt-1 text-xs font-bold text-zinc-500">
+        Status: {statusLabel[displayStatus(node)]}
+      </div>
+      {node.summary ? (
+        <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
+          {node.summary}
+        </p>
+      ) : null}
+      <div className="mt-4 grid gap-3 text-xs font-semibold text-zinc-600">
+        <div>
+          <div className="font-bold text-zinc-900">Evidence</div>
+          {node.evidence.length > 0 ? (
+            <ul className="mt-1 grid gap-1">
+              {node.evidence.map((evidence) => (
+                <li key={evidence.id}>{evidence.summary}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-zinc-400">No evidence yet.</div>
+          )}
+        </div>
+        <div>
+          <div className="font-bold text-zinc-900">Risks</div>
+          {node.risks.length > 0 ? (
+            <ul className="mt-1 grid gap-1">
+              {node.risks.map((risk) => (
+                <li key={risk.id}>{risk.summary}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-zinc-400">No risks observed.</div>
+          )}
+        </div>
+        {node.relatedFiles.length > 0 ? (
+          <div>
+            <div className="font-bold text-zinc-900">Related files</div>
+            <ul className="mt-1 grid gap-1">
+              {node.relatedFiles.map((file) => (
+                <li key={file} className="break-all">
+                  {file}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {node.rawEvents.length > 0 ? (
+          <div>
+            <div className="font-bold text-zinc-900">Raw events</div>
+            <div className="mt-1 text-zinc-400">
+              {node.rawEvents.length} graph events attached.
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
 
 function FeatureCanvasInner({
   graph,
   onSelectNode,
   topControls,
   actionControls,
+  runStatusBar,
   chatPanel,
 }: FeatureCanvasProps) {
   const { fitView } = useReactFlow<CanvasNode, Edge>();
   const didFitInitialNodes = useRef(false);
-  const viewModel = useMemo(() => buildFeatureViewModel(graph), [graph]);
+  const nodes = useMemo(() => buildNodes(graph), [graph]);
+  const edges = useMemo(() => buildEdges(graph), [graph]);
+  const selectedNode = graph.nodes.find((node) => node.id === graph.selectedNodeId);
 
   useEffect(() => {
-    if (viewModel.nodes.length === 0) {
+    if (nodes.length === 0) {
       didFitInitialNodes.current = false;
       return;
     }
@@ -497,21 +410,18 @@ function FeatureCanvasInner({
     }, 80);
 
     return () => window.clearTimeout(timeoutId);
-  }, [fitView, viewModel.nodes.length]);
+  }, [fitView, nodes.length]);
 
   return (
     <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
         <div className="hidden h-9 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 text-[11px] font-bold text-zinc-600 shadow-sm md:flex">
-          <span>Feature → Parts</span>
+          <span>Feature Map</span>
           <div className="mx-0.5 h-4 w-px bg-zinc-200" />
-          <span>Click any part to see evidence and risks</span>
+          <span>Pulsing dot = Codex is working here</span>
           <div className="mx-0.5 h-4 w-px bg-zinc-200" />
-          <div className="flex items-center gap-1.5 text-zinc-500">
-            <span className="cocanvas-working-dot h-2 w-2 rounded-full bg-emerald-400" />
-            <span>Pulsing green dot = Codex is working here</span>
-          </div>
+          <span>Click a node to see evidence and risks</span>
         </div>
       </div>
 
@@ -519,17 +429,20 @@ function FeatureCanvasInner({
         {actionControls}
       </div>
 
-      {chatPanel ? (
+      <Inspector node={selectedNode} />
+
+      {runStatusBar || chatPanel ? (
         <div
-          className="pointer-events-none absolute bottom-5 left-5 right-5 z-30 flex justify-center"
+          className="pointer-events-none absolute bottom-5 left-5 right-5 z-30 flex flex-col items-center justify-center gap-2"
         >
+          {runStatusBar}
           {chatPanel}
         </div>
       ) : null}
 
       <ReactFlow
-        nodes={viewModel.nodes}
-        edges={viewModel.edges}
+        nodes={nodes}
+        edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectNode(node.id)}
         fitView

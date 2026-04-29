@@ -8,7 +8,7 @@ export const mockGraphEvents: GraphEvent[] = [
       nodeType: "feature",
       title: "Task Board Web App",
       status: "building",
-      summary: "Codex is building a Next.js task board with pages, API routes, and database persistence.",
+      summary: "Codex is building a Next.js task board with dashboard, task creation, status controls, API routes, and persistence.",
       confidence: 0.92,
     },
   },
@@ -16,7 +16,7 @@ export const mockGraphEvents: GraphEvent[] = [
     type: "node.upsert",
     node: {
       id: "dashboard_page",
-      nodeType: "flow",
+      nodeType: "feature",
       title: "Open task dashboard",
       status: "implemented",
       summary: "User can open the dashboard and see existing tasks.",
@@ -30,14 +30,13 @@ export const mockGraphEvents: GraphEvent[] = [
       from: "task_board_app",
       to: "dashboard_page",
       relation: "contains",
-      label: "contains",
     },
   },
   {
     type: "node.upsert",
     node: {
-      id: "create_task_flow",
-      nodeType: "flow",
+      id: "create_task",
+      nodeType: "feature",
       title: "Create task",
       status: "implemented",
       summary: "User can add a task from the dashboard form.",
@@ -47,19 +46,38 @@ export const mockGraphEvents: GraphEvent[] = [
   {
     type: "edge.upsert",
     edge: {
-      id: "dashboard_enables_create_task",
-      from: "dashboard_page",
-      to: "create_task_flow",
-      relation: "enables",
-      label: "enables",
+      id: "task_board_contains_create_task",
+      from: "task_board_app",
+      to: "create_task",
+      relation: "contains",
+    },
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "status_controls",
+      nodeType: "feature",
+      title: "Update task status",
+      status: "building",
+      summary: "User can move a task between todo, doing, and done.",
+      relatedFiles: ["components/tasks/TaskCard.tsx", "app/api/tasks/[id]/route.ts"],
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "task_board_contains_status_controls",
+      from: "task_board_app",
+      to: "status_controls",
+      relation: "contains",
     },
   },
   {
     type: "node.upsert",
     node: {
       id: "task_api",
-      nodeType: "capability",
-      title: "Task API route",
+      nodeType: "feature",
+      title: "Task API",
       status: "implemented",
       summary: "Next.js route handlers expose task list and create operations.",
       relatedFiles: ["app/api/tasks/route.ts"],
@@ -72,14 +90,13 @@ export const mockGraphEvents: GraphEvent[] = [
       from: "task_board_app",
       to: "task_api",
       relation: "contains",
-      label: "contains",
     },
   },
   {
     type: "node.upsert",
     node: {
       id: "database_persistence",
-      nodeType: "capability",
+      nodeType: "feature",
       title: "Database persistence",
       status: "needs_evidence",
       summary: "Tasks should persist through a database-backed model.",
@@ -89,32 +106,10 @@ export const mockGraphEvents: GraphEvent[] = [
   {
     type: "edge.upsert",
     edge: {
-      id: "task_api_related_database",
-      from: "task_api",
-      to: "database_persistence",
-      relation: "related",
-      label: "uses",
-    },
-  },
-  {
-    type: "node.upsert",
-    node: {
-      id: "status_update_flow",
-      nodeType: "flow",
-      title: "Update task status",
-      status: "building",
-      summary: "User can move a task between todo, doing, and done.",
-      relatedFiles: ["components/tasks/TaskCard.tsx", "app/api/tasks/[id]/route.ts"],
-    },
-  },
-  {
-    type: "edge.upsert",
-    edge: {
-      id: "task_board_contains_status_update",
+      id: "task_board_contains_database_persistence",
       from: "task_board_app",
-      to: "status_update_flow",
+      to: "database_persistence",
       relation: "contains",
-      label: "contains",
     },
   },
   {
@@ -139,6 +134,22 @@ export const mockGraphEvents: GraphEvent[] = [
   },
   {
     type: "evidence.add",
+    targetId: "task_api",
+    evidence: {
+      id: "task_api_tests_passed",
+      kind: "test",
+      summary: "Task API tests passed after implementation.",
+      path: "tests/api/tasks.test.ts",
+    },
+  },
+  {
+    type: "status.update",
+    targetId: "task_api",
+    status: "verified",
+    summary: "Task API is verified by passing route tests.",
+  },
+  {
+    type: "evidence.add",
     targetId: "database_persistence",
     evidence: {
       id: "prisma_schema_added",
@@ -159,7 +170,7 @@ export const mockGraphEvents: GraphEvent[] = [
   },
   {
     type: "risk.add",
-    targetId: "status_update_flow",
+    targetId: "status_controls",
     risk: {
       id: "status_update_test_missing",
       severity: "medium",
@@ -168,36 +179,54 @@ export const mockGraphEvents: GraphEvent[] = [
     },
   },
   {
-    type: "evidence.add",
-    targetId: "task_api",
-    evidence: {
-      id: "task_api_tests_passed",
-      kind: "test",
-      summary: "Task API tests passed after implementation.",
-      path: "tests/api/tasks.test.ts",
+    type: "node.upsert",
+    node: {
+      id: "marketing_landing_page",
+      nodeType: "feature",
+      title: "Marketing Landing Page",
+      status: "implemented",
+      summary: "Codex also created a marketing page during the run.",
+      relatedFiles: ["app/marketing/page.tsx"],
     },
-  },
-  {
-    type: "status.update",
-    targetId: "task_api",
-    status: "verified",
-    summary: "Task API is verified by passing route tests.",
-  },
-  {
-    type: "status.update",
-    targetId: "database_persistence",
-    status: "risk",
-    summary: "Database persistence has schema evidence but migration evidence is missing.",
   },
   {
     type: "node.upsert",
     node: {
-      id: "marketing_landing_page",
-      nodeType: "cluster",
-      title: "Marketing Landing Page",
-      status: "unlinked",
-      summary: "Codex also created landing page assets that are not clearly related to the task board build.",
+      id: "marketing_hero_section",
+      nodeType: "feature",
+      title: "Hero Section",
+      status: "implemented",
+      summary: "The marketing page includes a top hero section.",
       relatedFiles: ["app/marketing/page.tsx"],
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "marketing_contains_hero",
+      from: "marketing_landing_page",
+      to: "marketing_hero_section",
+      relation: "contains",
+    },
+  },
+  {
+    type: "node.upsert",
+    node: {
+      id: "marketing_footer",
+      nodeType: "feature",
+      title: "Footer",
+      status: "implemented",
+      summary: "The marketing page includes a footer.",
+      relatedFiles: ["app/marketing/page.tsx"],
+    },
+  },
+  {
+    type: "edge.upsert",
+    edge: {
+      id: "marketing_contains_footer",
+      from: "marketing_landing_page",
+      to: "marketing_footer",
+      relation: "contains",
     },
   },
 ];
