@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
-import { appendGraphEvents } from "@/lib/graph/writeGraphEvents";
+import {
+  appendGraphEvents,
+  clearGraphEvents,
+} from "@/lib/graph/writeGraphEvents";
+import { observeRepoImportWithOpenAI } from "@/lib/observer/openaiRepoImportObserver";
 import { reduceGraphEvents } from "@/lib/graph/reduceGraphEvents";
 import { inferFeatureGraphFromArtifacts } from "@/lib/repo/inferFeatureGraphEvents";
 import { scanRepo } from "@/lib/repo/scanRepo";
 
 export const runtime = "nodejs";
+export const maxDuration = 180;
 
 type RepoImportBody = {
   repoPath?: unknown;
   persist?: unknown;
+  replace?: unknown;
 };
 
 function readString(value: unknown) {
@@ -28,13 +34,31 @@ export async function POST(request: Request) {
 
   try {
     const artifacts = await scanRepo(repoPath);
-    const inference = inferFeatureGraphFromArtifacts(artifacts);
+    let importMode = "openai-repo-import";
+    let observerError: string | undefined;
+    let inference;
+
+    try {
+      inference = await observeRepoImportWithOpenAI(repoPath, artifacts);
+    } catch (error) {
+      observerError = error instanceof Error ? error.message : "OpenAI import failed.";
+    }
+
+    if (!inference) {
+      inference = inferFeatureGraphFromArtifacts(artifacts);
+      importMode = "heuristic-fallback";
+    }
+
     const events = inference.events;
     const shouldPersist = body.persist !== false;
     let persistedGraphEvents = false;
 
     if (shouldPersist) {
       try {
+        if (body.replace === true) {
+          await clearGraphEvents(repoPath);
+        }
+
         await appendGraphEvents(repoPath, events);
         persistedGraphEvents = true;
       } catch (error) {
@@ -43,11 +67,12 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      mode: "repo-import",
+      mode: importMode,
       artifacts,
       events,
       productAreaCount: inference.productAreaCount,
       graph: reduceGraphEvents(events),
+      observerError,
       persistedGraphEvents,
     });
   } catch (error) {

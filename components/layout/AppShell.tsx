@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { FolderGit2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FolderGit2, RefreshCw, Undo2 } from "lucide-react";
 import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphEvent, ObservedGraphNode } from "@/lib/types/observedGraph";
@@ -20,10 +20,10 @@ import {
 const nodeReplayDelayMs = 1000;
 const updateReplayDelayMs = 180;
 const demoProjectLabel = "cocanvas / demo-task-board";
-const topPillClass =
-  "h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100";
 const primaryTopPillClass =
   "h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-800 hover:shadow-md disabled:cursor-not-allowed disabled:bg-zinc-400 disabled:hover:scale-100";
+const iconTopPillClass =
+  "inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-700 shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100";
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -223,6 +223,9 @@ export function AppShell() {
   const [elapsed, setElapsed] = useState("0s");
   const [mentionInsertRequest, setMentionInsertRequest] =
     useState<FeatureMentionInsertRequest>();
+  const [missingRelatedFilesByNodeId, setMissingRelatedFilesByNodeId] = useState<
+    Record<string, string[]>
+  >({});
   const autoImportedRepoRef = useRef<string | undefined>(undefined);
   const mentionRequestIdRef = useRef(0);
   const isBusy = isReplaying || isCodexRunning || isImporting;
@@ -286,6 +289,7 @@ export function AppShell() {
     setRunStartedAt(Date.now());
     setElapsed("0s");
     resetCanvas();
+    setMissingRelatedFilesByNodeId({});
 
     for (let index = 0; index < mockGraphEvents.length; ) {
       const { batch, nextIndex } = replayBatchAt(index);
@@ -310,30 +314,137 @@ export function AppShell() {
     setRunStartedAt(undefined);
   }
 
-  async function handleResetCanvas() {
+  const loadProjectMap = useCallback(
+    async ({
+      forceRescan = false,
+      returnFromDemo = false,
+    }: {
+      forceRescan?: boolean;
+      returnFromDemo?: boolean;
+    } = {}) => {
+      if (!repoPath) {
+        resetCanvas();
+        setMissingRelatedFilesByNodeId({});
+        setCanvasMode("real");
+        setRunStatus("idle");
+        setRunPhase("Ready");
+        setRunMessage("Choose a repo, then ask Codex what to build.");
+        setRunStartedAt(undefined);
+        return;
+      }
+
+      setCanvasMode("real");
+      clearSelectedNode();
+      setIsImporting(true);
+      setRunStatus("working");
+      setRunPhase(forceRescan ? "Rescanning repo" : "Loading repo");
+      setRunMessage(
+        forceRescan
+          ? "Scanning the current repository snapshot."
+          : "Checking for a saved project map.",
+      );
+      setRunStartedAt(Date.now());
+      setElapsed("0s");
+
+      try {
+        if (!forceRescan) {
+          const graphResponse = await fetch(
+            `/api/graph?repoPath=${encodeURIComponent(repoPath)}`,
+          );
+          const graphData = (await graphResponse.json()) as {
+            events?: GraphEvent[];
+            missingRelatedFilesByNodeId?: Record<string, string[]>;
+            error?: string;
+          };
+
+          if (!graphResponse.ok) {
+            throw new Error(graphData.error ?? "Feature map load failed.");
+          }
+
+          if ((graphData.events?.length ?? 0) > 0) {
+            replaceEvents(graphData.events ?? []);
+            setMissingRelatedFilesByNodeId(
+              graphData.missingRelatedFilesByNodeId ?? {},
+            );
+            setRunStatus("completed");
+            setRunPhase(returnFromDemo ? "Back to project" : "Project map loaded");
+            setRunMessage("Project map loaded.");
+            return;
+          }
+        }
+
+        setRunPhase("Analyzing repo");
+        setRunMessage("Scanning the current repository snapshot.");
+        resetCanvas();
+        setMissingRelatedFilesByNodeId({});
+
+        const response = await fetch("/api/repo/import", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ repoPath, persist: true, replace: true }),
+        });
+        const data = (await response.json()) as {
+          artifacts?: unknown[];
+          events?: GraphEvent[];
+          mode?: string;
+          observerError?: string;
+          productAreaCount?: number;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Repository import failed.");
+        }
+
+        replaceEvents(data.events ?? []);
+        setMissingRelatedFilesByNodeId({});
+        setRunStatus("completed");
+        setRunPhase(returnFromDemo ? "Back to project" : "Project map loaded");
+        const source =
+          data.mode === "openai-repo-import" ? "LLM import" : "Fallback import";
+        setRunMessage(
+          `${source} completed · ${data.artifacts?.length ?? 0} files scanned · ${
+            data.productAreaCount ?? 0
+          } areas mapped`,
+        );
+      } catch (error) {
+        setRunStatus("failed");
+        setRunPhase("Repo sync failed");
+        setRunMessage(
+          error instanceof Error ? error.message : "Repository import failed.",
+        );
+      } finally {
+        setIsImporting(false);
+        setRunStartedAt(undefined);
+      }
+    },
+    [clearSelectedNode, repoPath, replaceEvents, resetCanvas],
+  );
+
+  async function rescanProject() {
     if (isBusy) {
       return;
     }
 
-    const shouldClearPersistedGraph = canvasMode === "real" && Boolean(repoPath);
-
-    resetCanvas();
-    clearSelectedNode();
-    setCanvasMode("real");
-    setRunStatus("idle");
-    setRunPhase("Ready");
-    setRunMessage("Choose a repo, then ask Codex what to build.");
-    setRunStartedAt(undefined);
-
-    if (shouldClearPersistedGraph) {
-      await fetch("/api/graph/reset", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ repoPath }),
-      }).catch((error) => console.error(error));
+    if (!repoPath) {
+      setRunStatus("failed");
+      setRunPhase("No project selected");
+      setRunMessage("Choose a repository before rescanning.");
+      return;
     }
+
+    autoImportedRepoRef.current = repoPath;
+    await loadProjectMap({ forceRescan: true });
+  }
+
+  async function backToProject() {
+    if (isBusy) {
+      return;
+    }
+
+    await loadProjectMap({ returnFromDemo: true });
   }
 
   async function startCodexTask(
@@ -454,90 +565,8 @@ export function AppShell() {
     }
 
     autoImportedRepoRef.current = repoPath;
-
-    async function loadOrImportRepoGraph() {
-      setCanvasMode("real");
-      clearSelectedNode();
-      setIsImporting(true);
-      setRunStatus("working");
-      setRunPhase("Loading repo");
-      setRunMessage("Checking for a saved feature map.");
-      setRunStartedAt(Date.now());
-      setElapsed("0s");
-
-      try {
-        const graphResponse = await fetch(
-          `/api/graph?repoPath=${encodeURIComponent(repoPath)}`,
-        );
-        const graphData = (await graphResponse.json()) as {
-          events?: GraphEvent[];
-          error?: string;
-        };
-
-        if (!graphResponse.ok) {
-          throw new Error(graphData.error ?? "Feature map load failed.");
-        }
-
-        if ((graphData.events?.length ?? 0) > 0) {
-          replaceEvents(graphData.events ?? []);
-          setRunStatus("completed");
-          setRunPhase("Feature map loaded");
-          setRunMessage(`${graphData.events?.length ?? 0} saved graph events restored.`);
-          return;
-        }
-
-        setRunPhase("Analyzing repo");
-        setRunMessage("Scanning the current repository snapshot.");
-        resetCanvas();
-
-        const response = await fetch("/api/repo/import", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ repoPath, persist: true }),
-        });
-        const data = (await response.json()) as {
-          artifacts?: unknown[];
-          events?: GraphEvent[];
-          productAreaCount?: number;
-          error?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(data.error ?? "Repository import failed.");
-        }
-
-        replaceEvents(data.events ?? []);
-        setRunStatus("completed");
-        setRunPhase("Repo synced");
-        setRunMessage(
-          `Import completed · ${data.artifacts?.length ?? 0} files scanned · ${
-            data.productAreaCount ?? 0
-          } product areas mapped`,
-        );
-      } catch (error) {
-        setRunStatus("failed");
-        setRunPhase("Repo sync failed");
-        setRunMessage(
-          error instanceof Error ? error.message : "Repository import failed.",
-        );
-      } finally {
-        setIsImporting(false);
-        setRunStartedAt(undefined);
-      }
-    }
-
-    void loadOrImportRepoGraph();
-  }, [
-    mounted,
-    repoPath,
-    canvasMode,
-    isBusy,
-    clearSelectedNode,
-    resetCanvas,
-    replaceEvents,
-  ]);
+    void loadProjectMap();
+  }, [canvasMode, isBusy, loadProjectMap, mounted, repoPath]);
 
   async function selectRepo() {
     try {
@@ -560,6 +589,7 @@ export function AppShell() {
       window.localStorage.setItem("cocanvas.repoPath", data.repoPath);
       autoImportedRepoRef.current = undefined;
       resetCanvas();
+      setMissingRelatedFilesByNodeId({});
       setCanvasMode("real");
       clearSelectedNode();
       setRunStatus("idle");
@@ -587,7 +617,13 @@ export function AppShell() {
       return "cocanvas / no project selected";
     }
 
-    return `cocanvas / ${projectName(repoPath)}`;
+    const name = projectName(repoPath);
+
+    if (name.toLowerCase() === "cocanvas") {
+      return "Project: cocanvas";
+    }
+
+    return `cocanvas / ${name}`;
   }
 
   function handleSelectNode(nodeId: string) {
@@ -625,11 +661,12 @@ export function AppShell() {
     <div className="min-h-screen bg-white text-zinc-950">
       <main className="min-h-screen">
         <FeatureCanvas
+          canvasMode={canvasMode}
           graph={graph}
+          missingRelatedFilesByNodeId={missingRelatedFilesByNodeId}
           selectedNodeId={graph.selectedNodeId}
           onSelectNode={handleSelectNode}
           onClearSelectedNode={clearSelectedNode}
-          onMentionNode={insertMentionForNode}
           onAskCodexAboutNode={askCodexAboutNode}
           topControls={
             <>
@@ -656,13 +693,25 @@ export function AppShell() {
               >
                 {isReplaying ? "Replaying" : "Run Demo Replay"}
               </button>
+              {canvasMode === "demo" ? (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={backToProject}
+                  title="Back to project"
+                  className={iconTopPillClass}
+                >
+                  <Undo2 className="h-4 w-4" strokeWidth={2.3} />
+                </button>
+              ) : null}
               <button
                 type="button"
-                disabled={isBusy}
-                onClick={handleResetCanvas}
-                className={topPillClass}
+                disabled={isBusy || !repoPath}
+                onClick={rescanProject}
+                title="Rescan current project"
+                className={iconTopPillClass}
               >
-                Reset Canvas
+                <RefreshCw className="h-4 w-4" strokeWidth={2.3} />
               </button>
             </>
           }

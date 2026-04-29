@@ -23,13 +23,10 @@ import {
 } from "@xyflow/react";
 import {
   AlertTriangle,
-  AtSign,
   Bot,
   CheckCircle2,
   ChevronDown,
   FileCode2,
-  FolderOpen,
-  MoreHorizontal,
   Sparkles,
   X,
 } from "lucide-react";
@@ -40,11 +37,12 @@ import type {
 } from "@/lib/types/observedGraph";
 
 type FeatureCanvasProps = {
+  canvasMode?: "real" | "demo";
   graph: ObservedGraphState;
+  missingRelatedFilesByNodeId?: Record<string, string[]>;
   selectedNodeId?: string;
   onSelectNode: (id: string) => void;
   onClearSelectedNode?: () => void;
-  onMentionNode?: (node: ObservedGraphNode) => void;
   onAskCodexAboutNode?: (node: ObservedGraphNode) => void;
   topControls?: ReactNode;
   actionControls?: ReactNode;
@@ -351,18 +349,23 @@ const nodeTypes = {
   feature: FeatureNodeCard,
 };
 
-function sourceLabel(node: ObservedGraphNode) {
+function sourceLabel(node: ObservedGraphNode, canvasMode: "real" | "demo") {
+  if (canvasMode === "demo") {
+    return "Demo";
+  }
+
   const rawSummary = node.summary?.toLowerCase() ?? "";
 
-  if (rawSummary.includes("repository scan") || rawSummary.includes("repository snapshot")) {
-    return "Imported snapshot";
+  if (
+    rawSummary.includes("repository scan") ||
+    rawSummary.includes("repository snapshot") ||
+    rawSummary.includes("inferred from the repository") ||
+    rawSummary.startsWith("imported from")
+  ) {
+    return "Imported";
   }
 
-  if (node.rawEvents.some((event) => event.type === "node.upsert")) {
-    return "Observed graph";
-  }
-
-  return "Observed";
+  return "Codex run";
 }
 
 function summaryText(node: ObservedGraphNode) {
@@ -419,15 +422,17 @@ function InspectorAction({
 }
 
 function Inspector({
+  canvasMode = "real",
+  missingRelatedFiles = [],
   node,
   onAskCodex,
   onClose,
-  onMention,
 }: {
+  canvasMode?: "real" | "demo";
+  missingRelatedFiles?: string[];
   node?: ObservedGraphNode;
   onAskCodex?: (node: ObservedGraphNode) => void;
   onClose?: () => void;
-  onMention?: (node: ObservedGraphNode) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -464,52 +469,58 @@ function Inspector({
   const hasRisks = node.risks.length > 0;
   const hasFiles = node.relatedFiles.length > 0;
   const hasEvidence = node.evidence.length > 0;
+  const hasMissingFiles = canvasMode === "real" && missingRelatedFiles.length > 0;
 
   return (
-    <aside
-      className="pointer-events-auto absolute right-5 top-1/2 z-30 w-[320px] -translate-y-1/2 overflow-hidden rounded-[22px] border border-zinc-200 bg-white/96 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur transition-[height,opacity,transform] duration-300 ease-out"
-      style={{ height }}
-    >
-      <div className="h-full overflow-y-auto">
-        <div ref={contentRef}>
-          <div className="px-4 pb-4 pt-4">
-            <div className="flex items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-800 shadow-sm">
-                <Sparkles className="h-4 w-4" strokeWidth={2.2} />
-              </div>
+    <div className="pointer-events-auto absolute right-5 top-1/2 z-30 w-[320px] -translate-y-1/2">
+      <aside
+        className="cocanvas-inspector-panel overflow-hidden rounded-[22px] border border-zinc-200 bg-white/96 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur transition-[box-shadow,opacity] duration-150 ease-out"
+        style={{ height }}
+      >
+        <div className="h-full overflow-y-auto">
+          <div ref={contentRef}>
+            <div className="px-4 pb-4 pt-4">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-800 shadow-sm">
+                  <Sparkles className="h-4 w-4" strokeWidth={2.2} />
+                </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-bold leading-tight text-zinc-950">
-                    {node.title}
-                  </h2>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-base font-bold leading-tight text-zinc-950">
+                      {node.title}
+                    </h2>
                   <button
                     type="button"
                     aria-label="Close feature details"
-                    onClick={onClose}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onClose?.();
+                    }}
                     className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-zinc-400 transition hover:scale-[1.03] hover:bg-zinc-100 hover:text-zinc-700"
                   >
-                    <X className="h-4 w-4" strokeWidth={2.4} />
-                  </button>
-                </div>
+                      <X className="h-4 w-4" strokeWidth={2.4} />
+                    </button>
+                  </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone(status)}`}
-                  >
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone(status)}`}
+                    >
                     {statusLabel[status]}
                   </span>
                   <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-bold text-zinc-600">
-                    {sourceLabel(node)}
+                    {sourceLabel(node, canvasMode)}
                   </span>
                 </div>
 
-                <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
-                  {summaryText(node)}
-                </p>
+                  <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
+                    {summaryText(node)}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
           <Section title="Health">
             <div className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 py-3">
@@ -564,6 +575,24 @@ function Inspector({
             </Section>
           ) : null}
 
+          {hasMissingFiles ? (
+            <Section title={hasFiles ? "Missing files" : "Implementation"}>
+              <div className="grid gap-2">
+                {missingRelatedFiles.map((file) => (
+                  <div
+                    key={file}
+                    className="rounded-2xl bg-amber-50/70 px-3.5 py-3 text-xs font-semibold leading-5 text-amber-900 ring-1 ring-inset ring-amber-100"
+                  >
+                    <div>File not found in current repo</div>
+                    <code className="mt-1 block break-all font-mono text-[11px] font-semibold text-amber-700/80">
+                      {file}
+                    </code>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
           {hasEvidence ? (
             <Section title="Evidence">
               <div className="grid gap-2">
@@ -604,20 +633,9 @@ function Inspector({
 
           <Section title="Actions">
             <div className="flex flex-wrap gap-2">
-              <InspectorAction onClick={() => onMention?.(node)}>
-                <AtSign className="h-3.5 w-3.5" strokeWidth={2.4} />
-                Mention
-              </InspectorAction>
               <InspectorAction onClick={() => onAskCodex?.(node)}>
                 <Bot className="h-3.5 w-3.5" strokeWidth={2.4} />
                 Ask Codex
-              </InspectorAction>
-              <InspectorAction disabled={!hasFiles}>
-                <FolderOpen className="h-3.5 w-3.5" strokeWidth={2.4} />
-                Open file
-              </InspectorAction>
-              <InspectorAction>
-                <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2.4} />
               </InspectorAction>
             </div>
           </Section>
@@ -644,16 +662,18 @@ function Inspector({
             ) : null}
           </div>
         </div>
-      </div>
-    </aside>
+        </div>
+      </aside>
+    </div>
   );
 }
 
 function FeatureCanvasInner({
+  canvasMode = "real",
   graph,
+  missingRelatedFilesByNodeId = {},
   onAskCodexAboutNode,
   onClearSelectedNode,
-  onMentionNode,
   onSelectNode,
   topControls,
   actionControls,
@@ -676,10 +696,13 @@ function FeatureCanvasInner({
 
       <Inspector
         key={selectedNode?.id ?? "empty"}
+        canvasMode={canvasMode}
+        missingRelatedFiles={
+          selectedNode ? missingRelatedFilesByNodeId[selectedNode.id] : []
+        }
         node={selectedNode}
         onAskCodex={onAskCodexAboutNode}
         onClose={onClearSelectedNode}
-        onMention={onMentionNode}
       />
 
       {runStatusBar || chatPanel ? (
