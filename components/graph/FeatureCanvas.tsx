@@ -390,8 +390,8 @@ function FeatureCanvasInner({
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={24}
-          size={2.1}
+          gap={30}
+          size={3}
           color="#c5c7bf"
         />
         <Controls
