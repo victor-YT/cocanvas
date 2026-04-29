@@ -207,7 +207,7 @@ export function CodexChatPanel({
     }
 
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 70), 146)}px`;
+    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 52), 146)}px`;
   }, [draft]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -249,7 +249,7 @@ export function CodexChatPanel({
           disabled={isRunning}
           onChange={(event) => onDraftChange(event.target.value)}
           rows={1}
-          className="block max-h-[146px] min-h-[70px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[height,color] duration-200 ease-out placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:text-zinc-500"
+          className="block max-h-[146px] min-h-[52px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[height,color] duration-200 ease-out placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:text-zinc-500"
           placeholder="Ask Codex to build or change this repo."
         />
 

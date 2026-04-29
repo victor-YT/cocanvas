@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -18,7 +17,6 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
-  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -235,7 +233,13 @@ function buildNodes(graph: ObservedGraphState): CanvasNode[] {
 
   return graph.nodes
     .filter(isVisibleFeatureNode)
-    .map((node) => {
+    .map((node): CanvasNode | undefined => {
+      const position = layout.positions.get(node.id);
+
+      if (!position) {
+        return undefined;
+      }
+
       const viewNode: FeatureViewNode = {
         observedNode: node,
         status: displayStatus(node),
@@ -246,14 +250,15 @@ function buildNodes(graph: ObservedGraphState): CanvasNode[] {
 
       return {
         id: node.id,
-        type: "feature",
+        type: "feature" as const,
         data: { viewNode },
-        position: layout.positions.get(node.id) ?? { x: CANVAS_LEFT, y: CANVAS_TOP },
+        position,
         selected: graph.selectedNodeId === node.id,
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
       };
-    });
+    })
+    .filter((node): node is CanvasNode => node !== undefined);
 }
 
 function buildEdges(graph: ObservedGraphState): Edge[] {
@@ -428,29 +433,9 @@ function FeatureCanvasInner({
   runStatusBar,
   chatPanel,
 }: FeatureCanvasProps) {
-  const { fitView } = useReactFlow<CanvasNode, Edge>();
-  const didFitInitialNodes = useRef(false);
   const nodes = useMemo(() => buildNodes(graph), [graph]);
   const edges = useMemo(() => buildEdges(graph), [graph]);
   const selectedNode = graph.nodes.find((node) => node.id === graph.selectedNodeId);
-
-  useEffect(() => {
-    if (nodes.length === 0) {
-      didFitInitialNodes.current = false;
-      return;
-    }
-
-    if (didFitInitialNodes.current) {
-      return;
-    }
-
-    didFitInitialNodes.current = true;
-    const timeoutId = window.setTimeout(() => {
-      void fitView({ padding: 0.34, maxZoom: 0.95, duration: 420 });
-    }, 80);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [fitView, nodes.length]);
 
   return (
     <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
@@ -478,8 +463,6 @@ function FeatureCanvasInner({
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectNode(node.id)}
-        fitView
-        fitViewOptions={{ padding: 0.34, maxZoom: 0.95 }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.82 }}
         minZoom={0.35}
         maxZoom={1.6}
