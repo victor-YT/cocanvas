@@ -7,4 +7,4 @@ export const mockPrd = `Password Reset
 - There is a test for token reuse.`;
 
 export const mockCodexTask =
-  "Add protection so reset tokens cannot be reused.";
+  "Build password reset protection from scratch.";

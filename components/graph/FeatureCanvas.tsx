@@ -31,7 +31,7 @@ export function FeatureCanvas({
             <p className="text-sm text-zinc-500">
               {selectedFeature
                 ? `${selectedFeature.name} with ${activeArtifactCount} linked artifacts`
-                : "Generate a graph from the PRD"}
+                : "Run the demo to build the first feature"}
             </p>
           </div>
           <GraphLegend />
@@ -42,27 +42,14 @@ export function FeatureCanvas({
             <div>
               <p className="text-sm font-semibold text-zinc-900">No features yet</p>
               <p className="mt-1 max-w-sm text-sm text-zinc-500">
-                Paste a PRD and generate a graph to create the first product-level node.
+                Start a Codex task and let the canvas grow from implementation evidence.
               </p>
             </div>
           </div>
         ) : (
           <div className="flex flex-1 flex-col justify-between gap-5">
-            <div className="grid gap-4 lg:grid-cols-[210px_1fr_280px] lg:items-start">
-              <div className="relative">
-                <div className="hidden absolute left-full top-12 h-px w-8 bg-zinc-300 lg:block" />
-                <FeatureNode
-                  id="prd-root"
-                  name="PRD"
-                  status="verified"
-                  source="prd"
-                  selected={false}
-                  onSelect={() => undefined}
-                />
-              </div>
-
+            <div className="grid gap-4 lg:grid-cols-[1fr_300px] lg:items-start">
               <div className="relative grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="hidden absolute -left-5 top-12 h-px w-5 bg-zinc-300 lg:block" />
                 {scopedFeatures.map((feature) => (
                   <FeatureNode
                     key={feature.id}
@@ -95,7 +82,7 @@ export function FeatureCanvas({
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-3 text-sm text-zinc-500">
-                    Repo scan evidence will attach implementation files here.
+                    Codex file changes will attach implementation evidence here.
                   </div>
                 )}
               </div>

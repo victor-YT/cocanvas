@@ -5,32 +5,13 @@ export const mockGraph: GraphState = {
   timeline: [],
   features: [
     {
-      id: "feature-auth",
-      name: "Auth",
-      description: "Account access and identity flows.",
-      source: "prd",
-      status: "not_started",
-      confidence: 0.82,
-      acceptanceCriteria: [],
-      artifacts: [],
-      evidence: [
-        {
-          id: "evidence-auth-prd",
-          type: "prd",
-          title: "PRD section",
-          detail: "Password Reset belongs to the broader Auth area.",
-          confidence: 0.82,
-        },
-      ],
-    },
-    {
       id: "feature-password-reset",
       name: "Password Reset",
       description: "Users can request a reset email and safely use a reset token.",
-      source: "prd",
-      status: "risk",
+      source: "codex",
+      status: "not_started",
       confidence: 0.94,
-      riskSummary: "Token reuse still needs passing test evidence.",
+      riskSummary: "Waiting for implementation evidence.",
       acceptanceCriteria: [
         {
           id: "ac-reset-email",
@@ -99,23 +80,14 @@ export const mockGraph: GraphState = {
       ],
       evidence: [
         {
-          id: "evidence-prd-password-reset",
-          type: "prd",
-          title: "PRD source",
-          detail: "Password Reset criteria extracted from pasted PRD.",
+          id: "evidence-seed-password-reset",
+          type: "llm_inference",
+          title: "Feature seed",
+          detail: "Seed feature for the blank-project demo task.",
           confidence: 0.94,
         },
       ],
     },
   ],
-  edges: [
-    {
-      id: "edge-auth-password-reset",
-      from: "feature-auth",
-      to: "feature-password-reset",
-      type: "contains",
-      confidence: 0.86,
-      evidenceIds: ["evidence-auth-prd"],
-    },
-  ],
+  edges: [],
 };
