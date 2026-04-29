@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
@@ -24,6 +24,13 @@ export function AppShell() {
   const [isReplaying, setIsReplaying] = useState(false);
   const [currentRun, setCurrentRun] = useState("Demo run");
   const [notice, setNotice] = useState<string>();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setMounted(true), 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   async function runDemoReplay() {
     setIsReplaying(true);
@@ -46,6 +53,16 @@ export function AppShell() {
   function handleResetCanvas() {
     resetCanvas();
     setNotice("Canvas reset.");
+  }
+
+  if (!mounted) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#f7f7f4] text-zinc-950">
+        <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-sm font-medium shadow-sm">
+          Loading cocanvas...
+        </div>
+      </div>
+    );
   }
 
   return (

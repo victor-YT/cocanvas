@@ -1,13 +1,20 @@
-{"type":"node.upsert","node":{"id":"password_reset","nodeType":"feature","title":"Password Reset","status":"building","summary":"Codex is building a password reset flow.","confidence":0.9}}
-{"type":"node.upsert","node":{"id":"request_reset_email","nodeType":"flow","title":"Request reset email","status":"implemented","summary":"User can request a password reset email."}}
-{"type":"edge.upsert","edge":{"id":"password_reset_contains_request_reset_email","from":"password_reset","to":"request_reset_email","relation":"contains","label":"contains"}}
-{"type":"node.upsert","node":{"id":"set_new_password","nodeType":"flow","title":"Set new password","status":"building","summary":"User can set a new password using a reset token."}}
-{"type":"edge.upsert","edge":{"id":"password_reset_contains_set_new_password","from":"password_reset","to":"set_new_password","relation":"contains"}}
-{"type":"node.upsert","node":{"id":"token_expiry","nodeType":"capability","title":"Token expires","status":"needs_evidence","summary":"Reset tokens should expire after a time window."}}
-{"type":"edge.upsert","edge":{"id":"password_reset_contains_token_expiry","from":"password_reset","to":"token_expiry","relation":"contains"}}
-{"type":"node.upsert","node":{"id":"token_reuse_prevention","nodeType":"capability","title":"Token cannot be reused","status":"needs_evidence","summary":"Reset tokens should be consumed after first use."}}
-{"type":"edge.upsert","edge":{"id":"password_reset_contains_token_reuse","from":"password_reset","to":"token_reuse_prevention","relation":"contains"}}
-{"type":"risk.add","targetId":"token_reuse_prevention","risk":{"id":"reuse_test_failed","severity":"high","summary":"Token reuse test failed on first run."}}
-{"type":"evidence.add","targetId":"token_reuse_prevention","evidence":{"id":"reuse_test_passed","kind":"test","summary":"reset-token tests passed after patch.","path":"tests/reset-token.test.ts"}}
-{"type":"status.update","targetId":"token_reuse_prevention","status":"verified","summary":"Token reuse prevention is verified by passing tests."}
-{"type":"node.upsert","node":{"id":"billing_webhook","nodeType":"cluster","title":"Billing Webhook","status":"unlinked","summary":"Codex created billing webhook files during this run."}}
+{"type":"node.upsert","node":{"id":"task_board_app","nodeType":"feature","title":"Task Board Web App","status":"building","summary":"Codex is building a Next.js task board with pages, API routes, and database persistence.","confidence":0.92}}
+{"type":"node.upsert","node":{"id":"dashboard_page","nodeType":"flow","title":"Open task dashboard","status":"implemented","summary":"User can open the dashboard and see existing tasks.","relatedFiles":["app/page.tsx","components/tasks/TaskBoard.tsx"]}}
+{"type":"edge.upsert","edge":{"id":"task_board_contains_dashboard_page","from":"task_board_app","to":"dashboard_page","relation":"contains","label":"contains"}}
+{"type":"node.upsert","node":{"id":"create_task_flow","nodeType":"flow","title":"Create task","status":"implemented","summary":"User can add a task from the dashboard form.","relatedFiles":["components/tasks/NewTaskForm.tsx"]}}
+{"type":"edge.upsert","edge":{"id":"dashboard_enables_create_task","from":"dashboard_page","to":"create_task_flow","relation":"enables","label":"enables"}}
+{"type":"node.upsert","node":{"id":"task_api","nodeType":"capability","title":"Task API route","status":"implemented","summary":"Next.js route handlers expose task list and create operations.","relatedFiles":["app/api/tasks/route.ts"]}}
+{"type":"edge.upsert","edge":{"id":"task_board_contains_task_api","from":"task_board_app","to":"task_api","relation":"contains","label":"contains"}}
+{"type":"node.upsert","node":{"id":"database_persistence","nodeType":"capability","title":"Database persistence","status":"needs_evidence","summary":"Tasks should persist through a database-backed model.","relatedFiles":["prisma/schema.prisma","lib/db/tasks.ts"]}}
+{"type":"edge.upsert","edge":{"id":"task_api_related_database","from":"task_api","to":"database_persistence","relation":"related","label":"uses"}}
+{"type":"node.upsert","node":{"id":"status_update_flow","nodeType":"flow","title":"Update task status","status":"building","summary":"User can move a task between todo, doing, and done.","relatedFiles":["components/tasks/TaskCard.tsx","app/api/tasks/[id]/route.ts"]}}
+{"type":"edge.upsert","edge":{"id":"task_board_contains_status_update","from":"task_board_app","to":"status_update_flow","relation":"contains","label":"contains"}}
+{"type":"evidence.add","targetId":"dashboard_page","evidence":{"id":"dashboard_page_created","kind":"file","summary":"Dashboard page and task board component were created.","path":"app/page.tsx"}}
+{"type":"evidence.add","targetId":"task_api","evidence":{"id":"task_api_route_created","kind":"file","summary":"Task API route implements GET and POST handlers.","path":"app/api/tasks/route.ts"}}
+{"type":"evidence.add","targetId":"database_persistence","evidence":{"id":"prisma_schema_added","kind":"diff","summary":"Prisma Task model was added with title, status, and timestamps.","path":"prisma/schema.prisma"}}
+{"type":"risk.add","targetId":"database_persistence","risk":{"id":"migration_not_observed","severity":"medium","summary":"No migration or database reset command was observed.","path":"prisma/schema.prisma"}}
+{"type":"risk.add","targetId":"status_update_flow","risk":{"id":"status_update_test_missing","severity":"medium","summary":"No passing test observed for updating task status.","path":"tests/tasks.test.ts"}}
+{"type":"evidence.add","targetId":"task_api","evidence":{"id":"task_api_tests_passed","kind":"test","summary":"Task API tests passed after implementation.","path":"tests/api/tasks.test.ts"}}
+{"type":"status.update","targetId":"task_api","status":"verified","summary":"Task API is verified by passing route tests."}
+{"type":"status.update","targetId":"database_persistence","status":"risk","summary":"Database persistence has schema evidence but migration evidence is missing."}
+{"type":"node.upsert","node":{"id":"marketing_landing_page","nodeType":"cluster","title":"Marketing Landing Page","status":"unlinked","summary":"Codex also created landing page assets that are not clearly related to the task board build.","relatedFiles":["app/marketing/page.tsx"]}}
