@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import { observeCodexRunWithOpenAI } from "@/lib/observer/openaiGraphObserver";
 import type { GraphEvent } from "@/lib/types/observedGraph";
 
 type JsonRpcMessage = {
@@ -25,6 +26,9 @@ export type CodexAppServerRunResult = {
   assistantText: string;
   rawEvents: JsonRpcMessage[];
   graphEvents: GraphEvent[];
+  adapterGraphEvents: GraphEvent[];
+  observerGraphEvents: GraphEvent[];
+  observerError?: string;
 };
 
 type PendingRequest = {
@@ -327,7 +331,12 @@ export class CodexAppServerClient {
         });
       }
 
-      const threadResponse = await this.request("thread/start", { model });
+      const threadResponse = await this.request("thread/start", {
+        model,
+        cwd: input.repoPath,
+        experimentalRawEvents: true,
+        persistExtendedHistory: true,
+      });
       threadId = this.readThreadId(threadResponse);
 
       if (!threadId) {
@@ -337,17 +346,39 @@ export class CodexAppServerClient {
       await this.request("turn/start", {
         threadId,
         cwd: input.repoPath,
-        input: [{ type: "text", text: input.prompt }],
+        input: [{ type: "text", text: input.prompt, text_elements: [] }],
       });
 
       await this.waitForCompletion(() => completed);
+
+      const adapterGraphEvents = [...graphEvents];
+      let observerGraphEvents: GraphEvent[] = [];
+      let observerError: string | undefined;
+
+      try {
+        observerGraphEvents = await observeCodexRunWithOpenAI({
+          repoPath: input.repoPath,
+          prompt: input.prompt,
+          runId,
+          assistantText,
+          rawEvents: this.rawEvents,
+          adapterGraphEvents,
+        });
+      } catch (error) {
+        observerError =
+          error instanceof Error ? error.message : "OpenAI observer failed.";
+      }
 
       return {
         threadId,
         turnId,
         assistantText,
         rawEvents: this.rawEvents,
-        graphEvents,
+        graphEvents:
+          observerGraphEvents.length > 0 ? observerGraphEvents : adapterGraphEvents,
+        adapterGraphEvents,
+        observerGraphEvents,
+        observerError,
       };
     } finally {
       cleanup();

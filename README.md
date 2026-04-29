@@ -14,7 +14,7 @@ Codex can move faster than the user can review. Builders need a calm surface tha
 2. Run the demo replay.
 3. Watch graph events create feature, flow, capability, evidence, risk, and cluster nodes.
 4. Watch statuses move through building, implemented, risk, verified, and unlinked.
-5. Use the Codex input panel as the future task entry point.
+5. Use the Codex input panel to start a real Codex App Server task.
 
 ## Setup
 
@@ -25,13 +25,22 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-No environment variables are required for the current mock demo.
+Copy `.env.example` to `.env` and set `OPENAI_API_KEY` for live Codex and observer runs.
 
 ## Mock Demo
 
 Click `Run Demo Replay`.
 
 The replay emits append-only graph events. The graph updates without any live Codex integration.
+
+## Live Codex Mode
+
+The Codex input panel calls `/api/codex/start`, starts `codex app-server`,
+authenticates with `OPENAI_API_KEY`, and runs the task in the selected repo.
+After Codex completes, cocanvas sends the raw Codex events to an OpenAI
+Responses observer model and converts the result into the same graph event
+protocol used by the mock replay. Returned graph events are also appended to
+`.cocanvas/graph-events.jsonl` in the selected repo.
 
 ## Tech Stack
 
@@ -40,21 +49,19 @@ The replay emits append-only graph events. The graph updates without any live Co
 - TypeScript
 - Tailwind CSS
 - React Flow
-- Mock-first graph event replay
-
-Planned additions: graph event validation, `codex exec --json`, Codex SDK/App Server integration, and an OpenAI observer model.
+- Codex App Server
+- OpenAI Responses observer
+- Mock-first graph event replay fallback
 
 ## Current Limitations
 
-- The input panel does not start a real Codex task yet.
-- The observer model is not wired yet.
 - The canvas reads graph events, not raw Codex output.
-- State is local and in-memory.
+- The live observer falls back to adapter-derived graph events if OpenAI observation fails.
+- State in the browser is local; graph events are append-only JSONL on disk.
 
 ## Future Work
 
 - Normalize real `codex exec --json` output into graph events.
-- Add a Codex SDK or App Server path.
-- Add an OpenAI observer that converts diffs, tests, and logs into graph events.
-- Persist graph events and snapshots.
+- Add a full Codex SDK path if it becomes available for this workflow.
+- Add graph snapshots.
 - Add validation for `.cocanvas/graph-events.jsonl`.

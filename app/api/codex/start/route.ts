@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CodexAppServerClient } from "@/lib/codex/appServerClient";
+import { appendGraphEvents } from "@/lib/graph/writeGraphEvents";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -43,9 +44,20 @@ export async function POST(request: Request) {
       prompt,
       model: model || undefined,
     });
+    let persistedGraphEvents = false;
+
+    try {
+      await appendGraphEvents(repoPath, result.graphEvents);
+      persistedGraphEvents = true;
+    } catch (error) {
+      console.error(error);
+    }
 
     return NextResponse.json({
       mode: "codex-app-server",
+      observerMode:
+        result.observerGraphEvents.length > 0 ? "openai-responses" : "fallback",
+      persistedGraphEvents,
       ...result,
     });
   } catch (error) {
