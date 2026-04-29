@@ -783,7 +783,10 @@ export function CodexChatPanel({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    submitCurrentInput();
+  }
 
+  function submitCurrentInput() {
     if (!canSubmit) {
       return;
     }
@@ -903,6 +906,19 @@ export function CodexChatPanel({
               const editor = editorRef.current;
 
               if (!editor) {
+                return;
+              }
+
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.altKey &&
+                !mentionTrigger
+              ) {
+                event.preventDefault();
+                submitCurrentInput();
                 return;
               }
 
