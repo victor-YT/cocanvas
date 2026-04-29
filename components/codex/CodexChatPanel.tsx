@@ -397,7 +397,7 @@ export function CodexChatPanel({
           </div>
 
           <div className="flex shrink-0 items-center gap-2.5">
-            <SpinnerIcon />
+            {isReplaying ? <SpinnerIcon /> : null}
             <button
               type="button"
               aria-label="Open model and intelligence menu"
@@ -425,7 +425,7 @@ export function CodexChatPanel({
               disabled={!isReplaying && draft.trim().length === 0}
               className="grid h-10 w-10 place-items-center rounded-full bg-zinc-950 text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-100"
             >
-              {isReplaying || draft.trim().length === 0 ? <StopIcon /> : <ArrowUpIcon />}
+              {isReplaying ? <StopIcon /> : <ArrowUpIcon />}
             </button>
           </div>
         </div>

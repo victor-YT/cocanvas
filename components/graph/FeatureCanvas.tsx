@@ -16,21 +16,12 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import {
-  AlertTriangle,
-  Boxes,
-  Cpu,
-  FileCheck,
-  Layers,
-  Route,
-  type LucideIcon,
-} from "lucide-react";
+import { Boxes, Layers, Route, type LucideIcon } from "lucide-react";
 import type {
   ObservedGraphEdge,
   ObservedGraphNode,
   ObservedGraphState,
   ObservedNodeStatus,
-  ObservedNodeType,
 } from "@/lib/types/observedGraph";
 
 type FeatureCanvasProps = {
@@ -42,11 +33,40 @@ type FeatureCanvasProps = {
   chatPanel?: ReactNode;
 };
 
-type CanvasNodeData = {
+type CanvasNodeKind = "feature" | "part" | "unlinked";
+
+type FeatureViewNode = {
+  id: string;
   observedNode: ObservedGraphNode;
+  kind: CanvasNodeKind;
+  label: string;
+  status: ObservedNodeStatus;
+  evidenceCount: number;
+  riskCount: number;
+  partCount: number;
+  verifiedPartCount: number;
+  riskyPartCount: number;
+};
+
+type FeatureViewModel = {
+  nodes: CanvasNode[];
+  edges: Edge[];
+};
+
+type CanvasNodeData = {
+  viewNode: FeatureViewNode;
 };
 
 type CanvasNode = Node<CanvasNodeData, "observed">;
+
+type NodeTone = {
+  border: string;
+  accent: string;
+  icon: string;
+  ring: string;
+  shadow: string;
+  Icon: LucideIcon;
+};
 
 const statusLabel: Record<ObservedNodeStatus, string> = {
   planned: "Planned",
@@ -68,35 +88,16 @@ const statusBadgeTone: Record<ObservedNodeStatus, string> = {
   unlinked: "bg-violet-50 text-violet-700",
 };
 
-const nodeTypeLabel: Record<ObservedNodeType, string> = {
-  feature: "Feature",
-  flow: "Flow",
-  capability: "Capability",
-  evidence: "Evidence",
-  risk: "Risk",
-  cluster: "Unlinked Cluster",
-};
-
-const nodeTypeTone: Record<
-  ObservedNodeType,
-  {
-    border: string;
-    accent: string;
-    icon: string;
-    ring: string;
-    shadow: string;
-    Icon: LucideIcon;
-  }
-> = {
+const nodeTone: Record<CanvasNodeKind, NodeTone> = {
   feature: {
     border: "border-amber-300/70",
     accent: "bg-amber-400",
     icon: "bg-amber-50 text-amber-600",
     ring: "ring-amber-300/70",
-    shadow: "shadow-[0_14px_34px_rgba(245,158,11,0.12)]",
+    shadow: "shadow-[0_16px_38px_rgba(245,158,11,0.13)]",
     Icon: Layers,
   },
-  flow: {
+  part: {
     border: "border-blue-300/70",
     accent: "bg-blue-400",
     icon: "bg-blue-50 text-blue-600",
@@ -104,31 +105,7 @@ const nodeTypeTone: Record<
     shadow: "shadow-[0_14px_34px_rgba(59,130,246,0.12)]",
     Icon: Route,
   },
-  capability: {
-    border: "border-violet-300/70",
-    accent: "bg-violet-400",
-    icon: "bg-violet-50 text-violet-600",
-    ring: "ring-violet-300/70",
-    shadow: "shadow-[0_14px_34px_rgba(139,92,246,0.12)]",
-    Icon: Cpu,
-  },
-  evidence: {
-    border: "border-emerald-300/70",
-    accent: "bg-emerald-400",
-    icon: "bg-emerald-50 text-emerald-600",
-    ring: "ring-emerald-300/70",
-    shadow: "shadow-[0_10px_26px_rgba(16,185,129,0.12)]",
-    Icon: FileCheck,
-  },
-  risk: {
-    border: "border-rose-300/80",
-    accent: "bg-rose-400",
-    icon: "bg-rose-50 text-rose-600",
-    ring: "ring-rose-300/70",
-    shadow: "shadow-[0_10px_26px_rgba(244,63,94,0.12)]",
-    Icon: AlertTriangle,
-  },
-  cluster: {
+  unlinked: {
     border: "border-purple-300/70",
     accent: "bg-purple-400",
     icon: "bg-purple-50 text-purple-600",
@@ -138,394 +115,293 @@ const nodeTypeTone: Record<
   },
 };
 
-export const NODE_SIZE: Record<
-  ObservedNodeType,
-  { width: number; height: number }
-> = {
-  feature: { width: 260, height: 120 },
-  flow: { width: 260, height: 110 },
-  capability: { width: 280, height: 120 },
-  evidence: { width: 240, height: 92 },
-  risk: { width: 240, height: 92 },
-  cluster: { width: 280, height: 120 },
+const nodeSizeClass: Record<CanvasNodeKind, string> = {
+  feature: "w-[320px] min-h-[158px]",
+  part: "w-[330px] min-h-[136px]",
+  unlinked: "w-[300px] min-h-[130px]",
 };
 
-const nodeSizeClass: Record<ObservedNodeType, string> = {
-  feature: "w-[260px] min-h-[120px]",
-  flow: "w-[260px] min-h-[110px]",
-  capability: "w-[280px] min-h-[120px]",
-  evidence: "w-[240px] min-h-[92px]",
-  risk: "w-[240px] min-h-[92px]",
-  cluster: "w-[280px] min-h-[120px]",
+const NODE_SIZE: Record<CanvasNodeKind, { width: number; height: number }> = {
+  feature: { width: 320, height: 158 },
+  part: { width: 330, height: 136 },
+  unlinked: { width: 300, height: 130 },
 };
 
-const nodeTypeLegendItems: ObservedNodeType[] = [
-  "feature",
-  "flow",
-  "capability",
-  "evidence",
-  "risk",
-  "cluster",
-];
-
-export const COLUMN_X: Record<ObservedNodeType, number> = {
-  feature: 80,
-  flow: 420,
-  capability: 780,
-  evidence: 1160,
-  risk: 1160,
-  cluster: 1540,
+const COLUMN_X = {
+  feature: 120,
+  part: 520,
+  unlinked: 980,
 };
 
-const ROW_GAP = 36;
-const GROUP_GAP = 72;
-const CANVAS_TOP = 150;
-const ORPHAN_CENTER_Y = 330;
+const CANVAS_TOP = 170;
+const PART_GAP = 34;
+const GROUP_GAP = 96;
+const UNLINKED_GAP = 44;
 
-const layoutColumns: ObservedNodeType[][] = [
-  ["feature"],
-  ["flow"],
-  ["capability"],
-  ["evidence", "risk"],
-  ["cluster"],
-];
-
-type NodePosition = { x: number; y: number };
-
-function visualEdge(edge: ObservedGraphEdge) {
-  if (edge.relation === "supports" || edge.relation === "blocks") {
-    return {
-      from: edge.to,
-      to: edge.from,
-    };
-  }
-
-  return {
-    from: edge.from,
-    to: edge.to,
-  };
+function isFeatureNode(node: ObservedGraphNode) {
+  return node.nodeType === "feature";
 }
 
-function parentMapForGraph(
-  nodes: ObservedGraphNode[],
-  edges: ObservedGraphEdge[],
-) {
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const parentsById = new Map<string, string[]>();
+function isPartNode(node: ObservedGraphNode) {
+  return node.nodeType === "flow" || node.nodeType === "capability";
+}
 
-  edges.map(visualEdge).forEach((edge) => {
-    if (!nodesById.has(edge.from) || !nodesById.has(edge.to)) {
+function isUnlinkedNode(node: ObservedGraphNode) {
+  return node.nodeType === "cluster";
+}
+
+function visibleProductNodes(nodes: ObservedGraphNode[]) {
+  return nodes.filter(
+    (node) => isFeatureNode(node) || isPartNode(node) || isUnlinkedNode(node),
+  );
+}
+
+function parentFeatureForPart(
+  part: ObservedGraphNode,
+  features: ObservedGraphNode[],
+  productNodesById: Map<string, ObservedGraphNode>,
+  incomingEdgesByTarget: Map<string, ObservedGraphEdge[]>,
+) {
+  const visited = new Set<string>();
+  const queue = [part.id];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+
+    if (!currentId || visited.has(currentId)) {
+      continue;
+    }
+
+    visited.add(currentId);
+
+    for (const edge of incomingEdgesByTarget.get(currentId) ?? []) {
+      const source = productNodesById.get(edge.from);
+
+      if (!source) {
+        continue;
+      }
+
+      if (isFeatureNode(source)) {
+        return source;
+      }
+
+      if (isPartNode(source)) {
+        queue.push(source.id);
+      }
+    }
+  }
+
+  return features[0];
+}
+
+function edgeMapByTarget(edges: ObservedGraphEdge[]) {
+  const incomingEdgesByTarget = new Map<string, ObservedGraphEdge[]>();
+
+  edges.forEach((edge) => {
+    if (edge.relation === "supports" || edge.relation === "blocks") {
       return;
     }
 
-    parentsById.set(edge.to, [...(parentsById.get(edge.to) ?? []), edge.from]);
+    incomingEdgesByTarget.set(edge.to, [
+      ...(incomingEdgesByTarget.get(edge.to) ?? []),
+      edge,
+    ]);
   });
 
-  return parentsById;
+  return incomingEdgesByTarget;
 }
 
-function preferredParentId(
+function statusForPart(node: ObservedGraphNode) {
+  if (node.risks.length > 0 || node.status === "risk") {
+    return "risk";
+  }
+
+  if (node.status === "verified") {
+    return "verified";
+  }
+
+  if (node.status === "building") {
+    return "building";
+  }
+
+  if (node.status === "implemented") {
+    return "implemented";
+  }
+
+  return node.status;
+}
+
+function featureSummary(
+  parts: ObservedGraphNode[],
+  clusters: ObservedGraphNode[],
+) {
+  const verifiedPartCount = parts.filter(
+    (part) => statusForPart(part) === "verified",
+  ).length;
+  const riskyPartCount = parts.filter(
+    (part) => statusForPart(part) === "risk",
+  ).length;
+
+  return {
+    partCount: parts.length,
+    verifiedPartCount,
+    riskyPartCount,
+    clusterCount: clusters.length,
+  };
+}
+
+function toViewNode(
   node: ObservedGraphNode,
-  parentsById: Map<string, string[]>,
-  nodesById: Map<string, ObservedGraphNode>,
-) {
-  const parents = parentsById.get(node.id) ?? [];
+  kind: CanvasNodeKind,
+  summary: Partial<FeatureViewNode> = {},
+): FeatureViewNode {
+  return {
+    id: node.id,
+    observedNode: node,
+    kind,
+    label:
+      kind === "feature" ? "Feature" : kind === "unlinked" ? "Unlinked" : "Part",
+    status: kind === "part" ? statusForPart(node) : node.status,
+    evidenceCount: node.evidence.length,
+    riskCount: node.risks.length,
+    partCount: 0,
+    verifiedPartCount: 0,
+    riskyPartCount: 0,
+    ...summary,
+  };
+}
 
-  if (parents.length === 0) {
-    return undefined;
-  }
+function buildFeatureViewModel(graph: ObservedGraphState): FeatureViewModel {
+  const productNodes = visibleProductNodes(graph.nodes);
+  const features = productNodes.filter(isFeatureNode);
+  const parts = productNodes.filter(isPartNode);
+  const clusters = productNodes.filter(isUnlinkedNode);
+  const productNodesById = new Map(productNodes.map((node) => [node.id, node]));
+  const incomingEdgesByTarget = edgeMapByTarget(graph.edges);
+  const partsByFeatureId = new Map<string, ObservedGraphNode[]>();
 
-  if (node.nodeType === "evidence" || node.nodeType === "risk") {
-    return parents.find((parentId) => nodesById.has(parentId)) ?? parents[0];
-  }
-
-  if (node.nodeType === "flow") {
-    return (
-      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "feature") ??
-      parents[0]
+  parts.forEach((part) => {
+    const feature = parentFeatureForPart(
+      part,
+      features,
+      productNodesById,
+      incomingEdgesByTarget,
     );
-  }
 
-  if (node.nodeType === "capability") {
-    return (
-      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "flow") ??
-      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "feature") ??
-      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "capability") ??
-      parents[0]
-    );
-  }
+    if (!feature) {
+      return;
+    }
 
-  return parents[0];
-}
-
-function groupKeyForNode(
-  node: ObservedGraphNode,
-  columnIndex: number,
-  parentId?: string,
-) {
-  const lane =
-    node.nodeType === "evidence" || node.nodeType === "risk"
-      ? "detail"
-      : node.nodeType;
-
-  return `${columnIndex}:${lane}:${parentId ?? "root"}`;
-}
-
-function nodeCenterY(node: ObservedGraphNode, position: NodePosition) {
-  return position.y + NODE_SIZE[node.nodeType].height / 2;
-}
-
-function resolveColumnCollisions(
-  nodes: ObservedGraphNode[],
-  positionById: Map<string, NodePosition>,
-  groupKeyById: Map<string, string>,
-  orderById: Map<string, number>,
-) {
-  const nodesByColumn = new Map<number, ObservedGraphNode[]>();
-
-  nodes.forEach((node) => {
-    const x = positionById.get(node.id)?.x ?? COLUMN_X[node.nodeType];
-    nodesByColumn.set(x, [...(nodesByColumn.get(x) ?? []), node]);
+    partsByFeatureId.set(feature.id, [
+      ...(partsByFeatureId.get(feature.id) ?? []),
+      part,
+    ]);
   });
 
-  nodesByColumn.forEach((columnNodes) => {
-    const groupsByKey = new Map<string, ObservedGraphNode[]>();
-    let previousBottom: number | undefined;
+  const nodes: CanvasNode[] = [];
+  const edges: Edge[] = [];
+  let cursorY = CANVAS_TOP;
 
-    columnNodes.forEach((node) => {
-      const groupKey = groupKeyById.get(node.id) ?? node.id;
-      groupsByKey.set(groupKey, [...(groupsByKey.get(groupKey) ?? []), node]);
-    });
+  features.forEach((feature) => {
+    const featureParts = partsByFeatureId.get(feature.id) ?? [];
+    const summary = featureSummary(featureParts, clusters);
+    const partsHeight =
+      featureParts.length * NODE_SIZE.part.height +
+      Math.max(featureParts.length - 1, 0) * PART_GAP;
+    const groupHeight = Math.max(NODE_SIZE.feature.height, partsHeight);
+    const featureY = cursorY + groupHeight / 2 - NODE_SIZE.feature.height / 2;
+    const partStartY = cursorY + groupHeight / 2 - partsHeight / 2;
+    const featureViewNode = toViewNode(feature, "feature", summary);
 
-    [...groupsByKey.values()]
-      .map((groupNodes) => {
-        const top = Math.min(
-          ...groupNodes.map(
-            (node) => positionById.get(node.id)?.y ?? ORPHAN_CENTER_Y,
-          ),
-        );
-        const bottom = Math.max(
-          ...groupNodes.map((node) => {
-            const y = positionById.get(node.id)?.y ?? ORPHAN_CENTER_Y;
-            return y + NODE_SIZE[node.nodeType].height;
-          }),
-        );
-        const order = Math.min(
-          ...groupNodes.map((node) => orderById.get(node.id) ?? 0),
-        );
-
-        return {
-          nodes: groupNodes,
-          top,
-          bottom,
-          order,
-        };
-      })
-      .sort((groupA, groupB) => {
-        if (groupA.top !== groupB.top) {
-          return groupA.top - groupB.top;
-        }
-
-        return groupA.order - groupB.order;
-      })
-      .forEach((group) => {
-        const minY =
-          previousBottom === undefined ? CANVAS_TOP : previousBottom + GROUP_GAP;
-        const offset = Math.max(0, minY - group.top);
-
-        group.nodes.forEach((node) => {
-          const current = positionById.get(node.id) ?? {
-            x: COLUMN_X[node.nodeType],
-            y: ORPHAN_CENTER_Y,
-          };
-
-          positionById.set(node.id, {
-            ...current,
-            y: current.y + offset,
-          });
-        });
-        previousBottom = group.bottom + offset;
-      });
-  });
-}
-
-function placeColumnGroups(
-  columnNodes: ObservedGraphNode[],
-  columnIndex: number,
-  positionById: Map<string, NodePosition>,
-  groupKeyById: Map<string, string>,
-  parentsById: Map<string, string[]>,
-  nodesById: Map<string, ObservedGraphNode>,
-) {
-  const groups = new Map<
-    string,
-    { baseCenterY: number; nodes: ObservedGraphNode[] }
-  >();
-
-  columnNodes.forEach((node) => {
-    const parentId = preferredParentId(node, parentsById, nodesById);
-    const parentNode = parentId ? nodesById.get(parentId) : undefined;
-    const parentPosition = parentId ? positionById.get(parentId) : undefined;
-    const baseCenterY =
-      parentNode && parentPosition
-        ? nodeCenterY(parentNode, parentPosition)
-        : node.nodeType === "cluster"
-          ? CANVAS_TOP + NODE_SIZE.cluster.height / 2
-          : ORPHAN_CENTER_Y;
-    const groupKey = groupKeyForNode(
-      node,
-      columnIndex,
-      parentPosition ? parentId : undefined,
-    );
-    const group = groups.get(groupKey) ?? {
-      baseCenterY,
-      nodes: [],
-    };
-
-    group.nodes.push(node);
-    groups.set(groupKey, group);
-    groupKeyById.set(node.id, groupKey);
-  });
-
-  groups.forEach((group) => {
-    const totalHeight =
-      group.nodes.reduce(
-        (height, node) => height + NODE_SIZE[node.nodeType].height,
-        0,
-      ) +
-      Math.max(group.nodes.length - 1, 0) * ROW_GAP;
-    let y = group.baseCenterY - totalHeight / 2;
-
-    group.nodes.forEach((node) => {
-      positionById.set(node.id, {
-        x: COLUMN_X[node.nodeType],
-        y,
-      });
-      y += NODE_SIZE[node.nodeType].height + ROW_GAP;
-    });
-  });
-}
-
-export function layoutGraph(
-  nodes: ObservedGraphNode[],
-  edges: ObservedGraphEdge[],
-) {
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const parentsById = parentMapForGraph(nodes, edges);
-  const positionById = new Map<string, NodePosition>();
-  const groupKeyById = new Map<string, string>();
-  const orderById = new Map(nodes.map((node, index) => [node.id, index]));
-
-  layoutColumns.forEach((columnTypes, columnIndex) => {
-    const columnNodes = nodes.filter((node) =>
-      columnTypes.includes(node.nodeType),
-    );
-
-    placeColumnGroups(
-      columnNodes,
-      columnIndex,
-      positionById,
-      groupKeyById,
-      parentsById,
-      nodesById,
-    );
-    resolveColumnCollisions(
-      columnNodes,
-      positionById,
-      groupKeyById,
-      orderById,
-    );
-  });
-
-  return positionById;
-}
-
-function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasNode[] {
-  const positionById = layoutGraph(graph.nodes, graph.edges);
-
-  return graph.nodes.map((node) => {
-    return {
-      id: node.id,
+    nodes.push({
+      id: feature.id,
       type: "observed",
-      data: { observedNode: node },
-      position: positionById.get(node.id) ?? { x: 0, y: ORPHAN_CENTER_Y },
-      selected: selectedNodeId === node.id,
+      data: { viewNode: featureViewNode },
+      position: { x: COLUMN_X.feature, y: featureY },
+      selected: graph.selectedNodeId === feature.id,
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-    };
+    });
+
+    featureParts.forEach((part, index) => {
+      const partViewNode = toViewNode(part, "part");
+
+      nodes.push({
+        id: part.id,
+        type: "observed",
+        data: { viewNode: partViewNode },
+        position: {
+          x: COLUMN_X.part,
+          y: partStartY + index * (NODE_SIZE.part.height + PART_GAP),
+        },
+        selected: graph.selectedNodeId === part.id,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+      });
+      edges.push({
+        id: `feature_part_${feature.id}_${part.id}`,
+        source: feature.id,
+        target: part.id,
+        type: "smoothstep",
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#d4d4d8",
+          width: 16,
+          height: 16,
+        },
+        style: { stroke: "#d4d4d8", strokeWidth: 2.2 },
+      });
+    });
+
+    cursorY += groupHeight + GROUP_GAP;
   });
+
+  clusters.forEach((cluster, index) => {
+    nodes.push({
+      id: cluster.id,
+      type: "observed",
+      data: { viewNode: toViewNode(cluster, "unlinked") },
+      position: {
+        x: COLUMN_X.unlinked,
+        y: CANVAS_TOP + index * (NODE_SIZE.unlinked.height + UNLINKED_GAP),
+      },
+      selected: graph.selectedNodeId === cluster.id,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    });
+  });
+
+  return {
+    nodes,
+    edges,
+  };
 }
 
-function edgeStyle(relation: string) {
-  if (relation === "contains") {
-    return { stroke: "#d4d4d8", strokeWidth: 2.1 };
+function detailSummary(viewNode: FeatureViewNode) {
+  if (viewNode.kind === "feature") {
+    return `${viewNode.partCount} parts · ${viewNode.verifiedPartCount} verified · ${viewNode.riskyPartCount} risks`;
   }
 
-  if (relation === "enables") {
-    return { stroke: "#60a5fa", strokeWidth: 2.2 };
+  if (viewNode.kind === "part") {
+    return `${viewNode.evidenceCount} evidence · ${viewNode.riskCount} risk`;
   }
 
-  if (relation === "supports") {
-    return { stroke: "#34d399", strokeWidth: 2.4, strokeDasharray: "7 6" };
-  }
-
-  if (relation === "blocks") {
-    return { stroke: "#fb7185", strokeWidth: 2.4, strokeDasharray: "7 6" };
-  }
-
-  if (relation === "related") {
-    return { stroke: "#c084fc", strokeWidth: 2.1, strokeDasharray: "2 6" };
-  }
-
-  return { stroke: "#d4d4d8", strokeWidth: 2 };
-}
-
-function buildEdges(graph: ObservedGraphState): Edge[] {
-  return graph.edges.map((edge) => {
-    const displayEdge = visualEdge(edge);
-
-    return {
-      id: edge.id,
-      source: displayEdge.from,
-      target: displayEdge.to,
-      type: "smoothstep",
-      label: edge.label ?? edge.relation,
-      animated: edge.relation === "supports" || edge.relation === "blocks",
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: edgeStyle(edge.relation).stroke,
-        width: 16,
-        height: 16,
-      },
-      style: edgeStyle(edge.relation),
-      labelStyle: {
-        fill: "#71717a",
-        fontSize: 11,
-        fontWeight: 600,
-      },
-      labelBgStyle: {
-        fill: "rgba(255, 255, 255, 0.86)",
-      },
-      labelBgPadding: [8, 4],
-      labelBgBorderRadius: 8,
-    };
-  });
+  return "Unlinked product area";
 }
 
 function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
-  const node = data.observedNode;
-  const label = statusLabel[node.status];
-  const badgeTone = statusBadgeTone[node.status];
-  const typeTone = nodeTypeTone[node.nodeType];
-  const Icon = typeTone.Icon;
-  const isCompact = node.nodeType === "evidence" || node.nodeType === "risk";
+  const viewNode = data.viewNode;
+  const node = viewNode.observedNode;
+  const tone = nodeTone[viewNode.kind];
+  const Icon = tone.Icon;
+  const label = statusLabel[viewNode.status];
+  const badgeTone = statusBadgeTone[viewNode.status];
+  const isFeature = viewNode.kind === "feature";
 
   return (
     <div
-      className={`group cocanvas-node relative ${nodeSizeClass[node.nodeType]} cursor-pointer overflow-visible rounded-[18px] border bg-white text-left text-zinc-900 ${typeTone.border} ${typeTone.shadow} transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(24,24,27,0.13)] ${
-        isCompact ? "px-4 py-3.5" : "px-[18px] py-4"
-      } ${
-        selected ? `ring-2 ${typeTone.ring} ring-offset-2` : ""
+      className={`group cocanvas-node relative ${nodeSizeClass[viewNode.kind]} cursor-pointer overflow-visible rounded-[18px] border bg-white text-left text-zinc-900 ${tone.border} ${tone.shadow} px-[18px] py-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(24,24,27,0.13)] ${
+        selected ? `ring-2 ${tone.ring} ring-offset-2` : ""
       }`}
       role="button"
       tabIndex={0}
@@ -542,39 +418,42 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
       />
       <span
         aria-hidden="true"
-        className={`absolute bottom-3 left-3 top-3 w-1 rounded-full ${typeTone.accent}`}
+        className={`absolute bottom-3 left-3 top-3 w-1 rounded-full ${tone.accent}`}
       />
-      {node.status === "building" ? (
+      {viewNode.status === "building" ? (
         <span
           aria-label="Working"
           className="cocanvas-working-dot absolute right-4 top-4 h-3.5 w-3.5 rounded-full bg-emerald-400"
         />
       ) : null}
-      <div className={`flex items-start ${isCompact ? "gap-3 pl-2" : "gap-3.5 pl-2"}`}>
+      <div className="flex items-start gap-3.5 pl-2">
         <div
-          className={`grid shrink-0 place-items-center rounded-xl ${typeTone.icon} ${
-            isCompact ? "h-9 w-9" : "h-11 w-11"
+          className={`grid shrink-0 place-items-center rounded-xl ${tone.icon} ${
+            isFeature ? "h-12 w-12" : "h-11 w-11"
           }`}
         >
-          <Icon className={isCompact ? "h-[18px] w-[18px]" : "h-[22px] w-[22px]"} strokeWidth={2.2} />
+          <Icon className={isFeature ? "h-6 w-6" : "h-[22px] w-[22px]"} strokeWidth={2.2} />
         </div>
         <div className="min-w-0 flex-1 pr-5">
           <div
-            className={`truncate font-semibold tracking-normal ${
-              isCompact ? "text-[15px] leading-5" : "text-[17px] leading-6"
+            className={`font-bold leading-snug tracking-normal ${
+              isFeature ? "text-[19px]" : "text-[17px]"
             }`}
           >
             {node.title}
           </div>
-          <div className="mt-1 text-[11px] font-semibold uppercase text-zinc-500">
-            {nodeTypeLabel[node.nodeType]}
+          <div className="mt-1 text-[11px] font-bold uppercase text-zinc-500">
+            {viewNode.label}
           </div>
-          <div
-            className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-              badgeTone
-            } ${isCompact ? "mt-2" : ""}`}
-          >
-            {label}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${badgeTone}`}
+            >
+              {label}
+            </span>
+            <span className="text-[12px] font-bold text-zinc-500">
+              {detailSummary(viewNode)}
+            </span>
           </div>
         </div>
       </div>
@@ -593,7 +472,6 @@ const nodeTypes = {
 
 function FeatureCanvasInner({
   graph,
-  selectedNodeId,
   onSelectNode,
   topControls,
   actionControls,
@@ -601,14 +479,10 @@ function FeatureCanvasInner({
 }: FeatureCanvasProps) {
   const { fitView } = useReactFlow<CanvasNode, Edge>();
   const didFitInitialNodes = useRef(false);
-  const nodes = useMemo(
-    () => buildNodes(graph, selectedNodeId),
-    [graph, selectedNodeId],
-  );
-  const edges = useMemo(() => buildEdges(graph), [graph]);
+  const viewModel = useMemo(() => buildFeatureViewModel(graph), [graph]);
 
   useEffect(() => {
-    if (nodes.length === 0) {
+    if (viewModel.nodes.length === 0) {
       didFitInitialNodes.current = false;
       return;
     }
@@ -623,30 +497,20 @@ function FeatureCanvasInner({
     }, 80);
 
     return () => window.clearTimeout(timeoutId);
-  }, [fitView, nodes.length]);
+  }, [fitView, viewModel.nodes.length]);
 
   return (
     <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
-        <div className="hidden h-9 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 text-[11px] font-semibold text-zinc-600 shadow-sm md:flex">
-          {nodeTypeLegendItems.map((nodeType) => {
-            const typeTone = nodeTypeTone[nodeType];
-            const Icon = typeTone.Icon;
-
-            return (
-              <div key={nodeType} className="flex items-center gap-1.5">
-                <span className={`grid h-5 w-5 place-items-center rounded-lg ${typeTone.icon}`}>
-                  <Icon className="h-3.5 w-3.5" strokeWidth={2.3} />
-                </span>
-                <span>{nodeType === "cluster" ? "Cluster" : nodeTypeLabel[nodeType]}</span>
-              </div>
-            );
-          })}
+        <div className="hidden h-9 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 text-[11px] font-bold text-zinc-600 shadow-sm md:flex">
+          <span>Feature → Parts</span>
+          <div className="mx-0.5 h-4 w-px bg-zinc-200" />
+          <span>Click any part to see evidence and risks</span>
           <div className="mx-0.5 h-4 w-px bg-zinc-200" />
           <div className="flex items-center gap-1.5 text-zinc-500">
             <span className="cocanvas-working-dot h-2 w-2 rounded-full bg-emerald-400" />
-            <span>Pulsing green dot = Codex is working</span>
+            <span>Pulsing green dot = Codex is working here</span>
           </div>
         </div>
       </div>
@@ -664,8 +528,8 @@ function FeatureCanvasInner({
       ) : null}
 
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={viewModel.nodes}
+        edges={viewModel.edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectNode(node.id)}
         fitView
