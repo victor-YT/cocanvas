@@ -454,7 +454,7 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
         </div>
       </div>
       {node.summary ? (
-        <div className="pointer-events-none absolute left-0 top-[calc(100%+10px)] z-50 hidden w-[280px] rounded-2xl border border-zinc-200 bg-white/98 px-4 py-3 text-sm font-semibold leading-5 text-zinc-600 shadow-[0_16px_42px_rgba(24,24,27,0.14)] group-hover:block">
+        <div className="pointer-events-none absolute left-0 top-[calc(100%+10px)] z-50 hidden w-[280px] rounded-2xl border border-zinc-200 bg-white/98 px-4 py-3 text-sm font-bold leading-5 text-zinc-700 shadow-[0_16px_42px_rgba(24,24,27,0.14)] group-hover:block">
           {node.summary}
         </div>
       ) : null}
