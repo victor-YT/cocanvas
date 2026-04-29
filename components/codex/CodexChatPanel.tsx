@@ -153,7 +153,7 @@ function UpwardPicker<T extends string>({
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full bg-zinc-100/70 px-3 text-xs font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-600 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full bg-transparent px-1.5 text-xs font-bold text-zinc-400 transition hover:text-zinc-600 focus-visible:ring-2 focus-visible:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {icon}
         <span className="whitespace-nowrap">{selected.label}</span>
@@ -285,11 +285,11 @@ export function CodexChatPanel({
 
             <button
               type="submit"
+              aria-label={isRunning ? "Codex is running" : "Run Codex"}
               disabled={!canSubmit}
-              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-zinc-950 px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(24,24,27,0.16)] transition hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none"
+              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_8px_18px_rgba(24,24,27,0.16)] transition hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none"
             >
               {isRunning ? <SpinnerIcon /> : <ArrowUpIcon />}
-              {isRunning ? "Running" : "Run"}
             </button>
           </div>
         </div>
