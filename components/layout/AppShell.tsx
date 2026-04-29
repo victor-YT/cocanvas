@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { MockCodexEventSource } from "@/lib/codex/MockCodexEventSource";
 import { mockGraph } from "@/lib/demo/mockGraph";
 import { mockCodexTask, mockPrd } from "@/lib/demo/mockPrd";
+import { useCanvasEventStream } from "@/lib/hooks/useCanvasEventStream";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphState } from "@/lib/types/graph";
 import {
-  CodexChatPanel,
   type CodexChatMessage,
   type CodexFunctionId,
   type CodexRunOptions,
 } from "@/components/codex/CodexChatPanel";
+import { NodeSidePanel } from "@/components/inspector/NodeSidePanel";
 import { TopBar } from "./TopBar";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
 
@@ -26,13 +27,26 @@ const functionPrompts: Record<CodexFunctionId, string> = {
   scope: "Check whether the work stayed inside PRD scope.",
 };
 
-export function AppShell() {
-  const { graph, selectNode, applyEvent, replaceGraph } = useGraphStore();
+const configuredLiveCanvasApiUrl =
+  process.env.NEXT_PUBLIC_LIVE_CANVAS_API_URL?.replace(/\/$/, "");
+const liveCanvasApiUrl =
+  configuredLiveCanvasApiUrl && configuredLiveCanvasApiUrl.length > 0
+    ? configuredLiveCanvasApiUrl
+    : "/api/live-canvas";
+
+type AppShellProps = {
+  initialGraph?: GraphState;
+};
+
+export function AppShell({ initialGraph }: AppShellProps) {
+  const { graph, selectNode, applyEvent, replaceGraph } = useGraphStore(initialGraph);
   const [isReplaying, setIsReplaying] = useState(false);
   const [isGeneratingGraph, setIsGeneratingGraph] = useState(false);
   const [prd, setPrd] = useState(mockPrd);
   const [task, setTask] = useState(mockCodexTask);
-  const [baselineGraph, setBaselineGraph] = useState<GraphState>(mockGraph);
+  const [baselineGraph, setBaselineGraph] = useState<GraphState>(
+    initialGraph ?? mockGraph,
+  );
   const [notice, setNotice] = useState<string>();
   const [chatDraft, setChatDraft] = useState("");
   const [chatMessages, setChatMessages] = useState<CodexChatMessage[]>([
@@ -46,6 +60,28 @@ export function AppShell() {
   const selectedNode = graph.features.find(
     (node) => node.id === graph.selectedNodeId,
   );
+  const handleGraphSnapshot = useCallback(
+    (nextGraph: GraphState) => {
+      replaceGraph(nextGraph);
+      setNotice("Live canvas graph refreshed from the backend event store.");
+    },
+    [replaceGraph],
+  );
+  const handleCodexEvent = useCallback(
+    (event: Parameters<typeof applyEvent>[0]) => {
+      applyEvent(event);
+    },
+    [applyEvent],
+  );
+  const streamHandlers = useMemo(
+    () => ({
+      initialStatus: initialGraph ? ("connected" as const) : undefined,
+      onGraphSnapshot: handleGraphSnapshot,
+      onCodexEvent: handleCodexEvent,
+    }),
+    [handleCodexEvent, handleGraphSnapshot, initialGraph],
+  );
+  const { status: streamStatus } = useCanvasEventStream(streamHandlers);
 
   function appendChatMessage(message: Omit<CodexChatMessage, "id">) {
     setChatMessages((current) => [
@@ -114,7 +150,7 @@ export function AppShell() {
     return `${options.model} model, ${options.speed} speed, ${options.usage} usage, ${access}, ${options.parallel ? "parallel work" : "single work stream"}`;
   }
 
-  function submitCodexChat(options: CodexRunOptions) {
+  async function submitCodexChat(options: CodexRunOptions) {
     const prompt = chatDraft.trim();
 
     if (!prompt) {
@@ -122,13 +158,45 @@ export function AppShell() {
     }
 
     appendChatMessage({ role: "user", text: prompt });
-    appendChatMessage({
-      role: "codex",
-      text: selectedNode
-        ? `Ready to send this to the Codex SDK with ${selectedNode.name} as context and ${describeOptions(options)}.`
-        : `Ready to send this to the Codex SDK with the full feature map as context and ${describeOptions(options)}.`,
-    });
     setChatDraft("");
+
+    if (!selectedNode) {
+      appendChatMessage({
+        role: "codex",
+        text: `Ready to send this to the Codex SDK with the full feature map as context and ${describeOptions(options)}.`,
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${liveCanvasApiUrl}/nodes/${encodeURIComponent(selectedNode.id)}/chat`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            content: prompt,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Live Canvas backend returned ${response.status}.`);
+      }
+
+      appendChatMessage({
+        role: "codex",
+        text: `Stored node-scoped follow-up for ${selectedNode.name} with ${describeOptions(options)}.`,
+      });
+    } catch (error) {
+      appendChatMessage({
+        role: "codex",
+        text:
+          error instanceof Error
+            ? `Could not store the node follow-up: ${error.message}`
+            : "Could not store the node follow-up.",
+      });
+    }
   }
 
   function runCodexFunction(id: CodexFunctionId, options: CodexRunOptions) {
@@ -158,22 +226,23 @@ export function AppShell() {
         onRunDemo={runDemoReplay}
       />
       <main className="min-h-0 flex-1 p-3">
-        <FeatureCanvas
-          graph={graph}
-          selectedNodeId={graph.selectedNodeId}
-          onSelectNode={selectNode}
-          chatPanel={
-            <CodexChatPanel
-              selectedNode={selectedNode}
-              messages={chatMessages}
-              draft={chatDraft}
-              isReplaying={isReplaying}
-              onDraftChange={setChatDraft}
-              onSubmit={submitCodexChat}
-              onRunFunction={runCodexFunction}
-            />
-          }
-        />
+        <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <FeatureCanvas
+            graph={graph}
+            selectedNodeId={graph.selectedNodeId}
+            onSelectNode={selectNode}
+          />
+          <NodeSidePanel
+            node={selectedNode}
+            messages={chatMessages}
+            draft={chatDraft}
+            streamStatus={streamStatus}
+            timeline={graph.timeline}
+            onDraftChange={setChatDraft}
+            onSubmit={submitCodexChat}
+            onRunFunction={runCodexFunction}
+          />
+        </div>
       </main>
     </div>
   );

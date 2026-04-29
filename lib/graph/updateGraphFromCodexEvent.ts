@@ -205,6 +205,23 @@ export function updateGraphFromCodexEvent(
     }
   }
 
+  if (event.type === "conflict_detected") {
+    for (const path of event.paths ?? []) {
+      const match = mapPathToFeatureMatch(path, graph);
+      const feature = match?.feature;
+
+      if (!feature) {
+        upsertDriftNode(graph, event, path);
+        continue;
+      }
+
+      feature.status = "risk";
+      feature.riskSummary = "Git reported an unmerged conflict for this feature.";
+      appendEvidence(feature, eventEvidence(event, path));
+      graph.selectedNodeId = feature.id;
+    }
+  }
+
   if (event.type === "plan_updated" || event.type === "agent_message") {
     for (const feature of inferRelatedFeatures(graph, event)) {
       appendEvidence(feature, eventEvidence(event));

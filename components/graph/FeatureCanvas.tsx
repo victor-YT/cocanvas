@@ -402,11 +402,16 @@ export function FeatureCanvas({
       ) : null}
 
       {scopedFeatures.length === 0 ? (
-        <div className="relative z-10 grid h-full min-h-[640px] place-items-center p-8 text-center">
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/90 p-8 shadow-sm">
-            <p className="text-sm font-semibold text-zinc-900">No features yet</p>
-            <p className="mt-1 max-w-sm text-sm text-zinc-500">
-              Paste a PRD and generate a graph to create the first product-level node.
+        <div className="relative z-10 h-full min-h-[640px] p-4 pt-28">
+          <div className="max-w-[280px] rounded-lg border border-dashed border-zinc-300 bg-white/90 px-3 py-2 text-left shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+              Empty canvas
+            </p>
+            <p className="mt-1 text-sm font-medium text-zinc-900">
+              No feature nodes yet.
+            </p>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">
+              Paste a PRD and generate a graph to add the first node.
             </p>
           </div>
         </div>

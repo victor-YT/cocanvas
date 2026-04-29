@@ -4,6 +4,7 @@ export type CodexEventType =
   | "plan_updated"
   | "file_change"
   | "diff_updated"
+  | "conflict_detected"
   | "command_started"
   | "command_completed"
   | "test_passed"

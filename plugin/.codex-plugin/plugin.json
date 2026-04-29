@@ -1,0 +1,36 @@
+{
+  "name": "codex-live-canvas",
+  "version": "0.1.0",
+  "description": "A live visual canvas for Codex threads, feature nodes, diffs, tests, conflicts, and node-scoped follow-up chats.",
+  "author": {
+    "name": "cocanvas contributors"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "codex",
+    "canvas",
+    "mcp",
+    "agents",
+    "workflow"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./mcp/live-canvas.mcp.json",
+  "interface": {
+    "displayName": "Codex Live Canvas",
+    "shortDescription": "Track parallel Codex work as live feature nodes.",
+    "longDescription": "Codex Live Canvas packages a sync skill and MCP bridge so Codex threads can report feature status, changed files, tests, risks, conflicts, and node-scoped follow-up context to the cocanvas app.",
+    "developerName": "cocanvas contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "MCP"
+    ],
+    "defaultPrompt": [
+      "Start a Live Canvas node for this task.",
+      "Update this feature node while you work.",
+      "Get context for this node follow-up."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

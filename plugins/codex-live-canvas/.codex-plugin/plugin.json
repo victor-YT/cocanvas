@@ -1,0 +1,52 @@
+{
+  "name": "codex-live-canvas",
+  "version": "0.1.1",
+  "description": "A live visual canvas for Codex threads, feature nodes, diffs, tests, conflicts, and node-scoped follow-up chats.",
+  "author": {
+    "name": "cocanvas contributors",
+    "email": "[TODO: author@example.com]",
+    "url": "[TODO: https://github.com/cocanvas]"
+  },
+  "homepage": "[TODO: https://docs.example.com/codex-live-canvas]",
+  "repository": "[TODO: https://github.com/cocanvas/codex-live-canvas]",
+  "license": "UNLICENSED",
+  "keywords": [
+    "codex",
+    "canvas",
+    "mcp",
+    "agents",
+    "workflow"
+  ],
+  "skills": "./skills/",
+  "hooks": "[TODO: ./hooks.json]",
+  "mcpServers": "./.mcp.json",
+  "apps": "[TODO: ./.app.json]",
+  "interface": {
+    "displayName": "Codex Live Canvas",
+    "shortDescription": "Track parallel Codex work as live feature nodes.",
+    "longDescription": "Codex Live Canvas packages a sync skill and MCP bridge so Codex threads can report feature status, changed files, tests, risks, conflicts, and node-scoped follow-up context to the cocanvas app.",
+    "developerName": "cocanvas contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "MCP"
+    ],
+    "websiteURL": "[TODO: https://docs.example.com/codex-live-canvas]",
+    "privacyPolicyURL": "[TODO: https://docs.example.com/privacy]",
+    "termsOfServiceURL": "[TODO: https://docs.example.com/terms]",
+    "defaultPrompt": [
+      "Start a Live Canvas node for this task.",
+      "Update this feature node while you work.",
+      "Get context for this node follow-up."
+    ],
+    "brandColor": "#2563EB",
+    "composerIcon": "[TODO: ./assets/icon.png]",
+    "logo": "[TODO: ./assets/logo.png]",
+    "screenshots": [
+      "[TODO: ./assets/screenshot1.png]",
+      "[TODO: ./assets/screenshot2.png]",
+      "[TODO: ./assets/screenshot3.png]"
+    ]
+  }
+}

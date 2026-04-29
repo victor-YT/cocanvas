@@ -1,0 +1,19 @@
+{
+  "name": "live-canvas",
+  "command": "node",
+  "args": [
+    "../../mcp-server/dist/index.js"
+  ],
+  "env": {
+    "LIVE_CANVAS_API_URL": "http://localhost:4000",
+    "LIVE_CANVAS_EVENT_STREAM_URL": "http://localhost:4000/api/events/stream"
+  },
+  "tools": [
+    "create_feature_node",
+    "update_feature_node",
+    "attach_diff",
+    "mark_test_result",
+    "mark_conflict",
+    "get_node_context"
+  ]
+}

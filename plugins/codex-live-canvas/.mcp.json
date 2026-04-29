@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "live-canvas": {
+      "command": "node",
+      "args": [
+        "/Users/lora/cocanvas/mcp-server/dist/index.js"
+      ],
+      "env": {
+        "LIVE_CANVAS_API_URL": "http://localhost:4000",
+        "LIVE_CANVAS_EVENT_STREAM_URL": "http://localhost:4000/api/events/stream"
+      }
+    }
+  }
+}

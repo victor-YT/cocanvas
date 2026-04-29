@@ -1,0 +1,15 @@
+{
+  "name": "codex-live-canvas",
+  "version": "0.1.0",
+  "description": "A live visual canvas for Codex threads, feature nodes, diffs, tests, conflicts, and node-scoped follow-up chats.",
+  "skills": [
+    "./skills/live-canvas-sync"
+  ],
+  "mcpServers": [
+    "./mcp/live-canvas.mcp.json"
+  ],
+  "docs": {
+    "architecture": "../docs/LIVE_CANVAS_PLUGIN_ARCHITECTURE.md",
+    "demoScript": "../docs/LIVE_CANVAS_PLUGIN_DEMO_SCRIPT.md"
+  }
+}
