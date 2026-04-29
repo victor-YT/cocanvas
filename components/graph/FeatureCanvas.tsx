@@ -15,6 +15,15 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
+import {
+  AlertTriangle,
+  Boxes,
+  Cpu,
+  FileCheck,
+  Layers,
+  Route,
+  type LucideIcon,
+} from "lucide-react";
 import type {
   ObservedGraphEdge,
   ObservedGraphNode,
@@ -38,35 +47,24 @@ type CanvasNodeData = {
 
 type CanvasNode = Node<CanvasNodeData, "observed">;
 
-const statusTone: Record<ObservedNodeStatus, { dot: string; label: string }> = {
-  planned: {
-    dot: "bg-zinc-300",
-    label: "Planned",
-  },
-  building: {
-    dot: "bg-emerald-400",
-    label: "Building",
-  },
-  implemented: {
-    dot: "bg-blue-400",
-    label: "Implemented",
-  },
-  needs_evidence: {
-    dot: "bg-zinc-400",
-    label: "Needs evidence",
-  },
-  verified: {
-    dot: "bg-emerald-400",
-    label: "Verified",
-  },
-  risk: {
-    dot: "bg-rose-400",
-    label: "Risk",
-  },
-  unlinked: {
-    dot: "bg-violet-400",
-    label: "Unlinked",
-  },
+const statusLabel: Record<ObservedNodeStatus, string> = {
+  planned: "Planned",
+  building: "Building",
+  implemented: "Implemented",
+  needs_evidence: "Needs evidence",
+  verified: "Verified",
+  risk: "Risk",
+  unlinked: "Unlinked",
+};
+
+const statusBadgeTone: Record<ObservedNodeStatus, string> = {
+  planned: "bg-zinc-100 text-zinc-600",
+  building: "bg-emerald-50 text-emerald-700",
+  implemented: "bg-blue-50 text-blue-700",
+  needs_evidence: "bg-zinc-100 text-zinc-700",
+  verified: "bg-emerald-50 text-emerald-700",
+  risk: "bg-rose-50 text-rose-700",
+  unlinked: "bg-violet-50 text-violet-700",
 };
 
 const nodeTypeLabel: Record<ObservedNodeType, string> = {
@@ -77,6 +75,85 @@ const nodeTypeLabel: Record<ObservedNodeType, string> = {
   risk: "Risk",
   cluster: "Unlinked Cluster",
 };
+
+const nodeTypeTone: Record<
+  ObservedNodeType,
+  {
+    border: string;
+    accent: string;
+    icon: string;
+    ring: string;
+    shadow: string;
+    Icon: LucideIcon;
+  }
+> = {
+  feature: {
+    border: "border-amber-300/70",
+    accent: "bg-amber-400",
+    icon: "bg-amber-50 text-amber-600",
+    ring: "ring-amber-300/70",
+    shadow: "shadow-[0_14px_34px_rgba(245,158,11,0.12)]",
+    Icon: Layers,
+  },
+  flow: {
+    border: "border-blue-300/70",
+    accent: "bg-blue-400",
+    icon: "bg-blue-50 text-blue-600",
+    ring: "ring-blue-300/70",
+    shadow: "shadow-[0_14px_34px_rgba(59,130,246,0.12)]",
+    Icon: Route,
+  },
+  capability: {
+    border: "border-violet-300/70",
+    accent: "bg-violet-400",
+    icon: "bg-violet-50 text-violet-600",
+    ring: "ring-violet-300/70",
+    shadow: "shadow-[0_14px_34px_rgba(139,92,246,0.12)]",
+    Icon: Cpu,
+  },
+  evidence: {
+    border: "border-emerald-300/70",
+    accent: "bg-emerald-400",
+    icon: "bg-emerald-50 text-emerald-600",
+    ring: "ring-emerald-300/70",
+    shadow: "shadow-[0_10px_26px_rgba(16,185,129,0.12)]",
+    Icon: FileCheck,
+  },
+  risk: {
+    border: "border-rose-300/80",
+    accent: "bg-rose-400",
+    icon: "bg-rose-50 text-rose-600",
+    ring: "ring-rose-300/70",
+    shadow: "shadow-[0_10px_26px_rgba(244,63,94,0.12)]",
+    Icon: AlertTriangle,
+  },
+  cluster: {
+    border: "border-purple-300/70",
+    accent: "bg-purple-400",
+    icon: "bg-purple-50 text-purple-600",
+    ring: "ring-purple-300/70",
+    shadow: "shadow-[0_14px_34px_rgba(168,85,247,0.12)]",
+    Icon: Boxes,
+  },
+};
+
+const nodeSize: Record<ObservedNodeType, string> = {
+  feature: "w-[270px] min-h-[112px]",
+  flow: "w-[260px] min-h-[108px]",
+  capability: "w-[265px] min-h-[108px]",
+  evidence: "w-[215px] min-h-[78px]",
+  risk: "w-[215px] min-h-[78px]",
+  cluster: "w-[265px] min-h-[108px]",
+};
+
+const nodeTypeLegendItems: ObservedNodeType[] = [
+  "feature",
+  "flow",
+  "capability",
+  "evidence",
+  "risk",
+  "cluster",
+];
 
 const layerX: Record<ObservedNodeType, number> = {
   feature: 100,
@@ -322,39 +399,64 @@ function buildEdges(graph: ObservedGraphState): Edge[] {
 
 function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.observedNode;
-  const tone = statusTone[node.status];
+  const label = statusLabel[node.status];
+  const badgeTone = statusBadgeTone[node.status];
+  const typeTone = nodeTypeTone[node.nodeType];
+  const Icon = typeTone.Icon;
+  const isCompact = node.nodeType === "evidence" || node.nodeType === "risk";
 
   return (
     <div
-      className={`cocanvas-node relative w-[310px] rounded-[18px] border border-zinc-200 bg-white px-5 py-[18px] text-left text-zinc-900 shadow-[0_12px_28px_rgba(24,24,27,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_16px_34px_rgba(24,24,27,0.12)] ${
-        selected ? "ring-2 ring-zinc-950 ring-offset-2" : ""
+      className={`group cocanvas-node relative ${nodeSize[node.nodeType]} cursor-pointer overflow-visible rounded-[18px] border bg-white text-left text-zinc-900 ${typeTone.border} ${typeTone.shadow} transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(24,24,27,0.13)] ${
+        isCompact ? "px-4 py-3.5" : "px-[18px] py-4"
+      } ${
+        selected ? `ring-2 ${typeTone.ring} ring-offset-2` : ""
       }`}
       role="button"
       tabIndex={0}
     >
+      <span
+        aria-hidden="true"
+        className={`absolute bottom-3 left-3 top-3 w-1 rounded-full ${typeTone.accent}`}
+      />
       {node.status === "building" ? (
         <span
           aria-label="Working"
           className="cocanvas-working-dot absolute right-4 top-4 h-3.5 w-3.5 rounded-full bg-emerald-400"
         />
       ) : null}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 pr-6">
-          <div className="truncate text-[19px] font-semibold leading-7 tracking-normal">
+      <div className={`flex items-start ${isCompact ? "gap-3 pl-2" : "gap-3.5 pl-2"}`}>
+        <div
+          className={`grid shrink-0 place-items-center rounded-xl ${typeTone.icon} ${
+            isCompact ? "h-9 w-9" : "h-11 w-11"
+          }`}
+        >
+          <Icon className={isCompact ? "h-[18px] w-[18px]" : "h-[22px] w-[22px]"} strokeWidth={2.2} />
+        </div>
+        <div className="min-w-0 flex-1 pr-5">
+          <div
+            className={`truncate font-semibold tracking-normal ${
+              isCompact ? "text-[15px] leading-5" : "text-[17px] leading-6"
+            }`}
+          >
             {node.title}
           </div>
-          <div className="mt-1.5 text-[12px] font-semibold uppercase text-zinc-500">
+          <div className="mt-1 text-[11px] font-semibold uppercase text-zinc-500">
             {nodeTypeLabel[node.nodeType]}
+          </div>
+          <div
+            className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              badgeTone
+            } ${isCompact ? "mt-2" : ""}`}
+          >
+            {label}
           </div>
         </div>
       </div>
-      <div className="mt-4 inline-flex rounded-full bg-zinc-100 px-3 py-1 text-[13px] font-semibold text-zinc-700">
-        {tone.label}
-      </div>
       {node.summary ? (
-        <p className="mt-3 line-clamp-2 text-[15px] leading-6 text-zinc-600">
+        <div className="pointer-events-none absolute left-0 top-[calc(100%+10px)] z-50 hidden w-[280px] rounded-2xl border border-zinc-200 bg-white/98 px-4 py-3 text-sm font-semibold leading-5 text-zinc-600 shadow-[0_16px_42px_rgba(24,24,27,0.14)] group-hover:block">
           {node.summary}
-        </p>
+        </div>
       ) : null}
     </div>
   );
@@ -402,13 +504,25 @@ function FeatureCanvasInner({
     <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
-        <div className="hidden h-11 items-center gap-3 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-600 shadow-sm md:flex">
-          {Object.entries(statusTone).map(([status, tone]) => (
-            <div key={status} className="flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full ${tone.dot}`} />
-              <span>{tone.label}</span>
-            </div>
-          ))}
+        <div className="hidden h-9 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 text-[11px] font-semibold text-zinc-600 shadow-sm md:flex">
+          {nodeTypeLegendItems.map((nodeType) => {
+            const typeTone = nodeTypeTone[nodeType];
+            const Icon = typeTone.Icon;
+
+            return (
+              <div key={nodeType} className="flex items-center gap-1.5">
+                <span className={`grid h-5 w-5 place-items-center rounded-lg ${typeTone.icon}`}>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={2.3} />
+                </span>
+                <span>{nodeType === "cluster" ? "Cluster" : nodeTypeLabel[nodeType]}</span>
+              </div>
+            );
+          })}
+          <div className="mx-0.5 h-4 w-px bg-zinc-200" />
+          <div className="flex items-center gap-1.5 text-zinc-500">
+            <span className="cocanvas-working-dot h-2 w-2 rounded-full bg-emerald-400" />
+            <span>Pulsing green dot = Codex is working</span>
+          </div>
         </div>
       </div>
 

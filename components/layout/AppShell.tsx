@@ -51,7 +51,6 @@ export function AppShell() {
   } = useGraphStore([]);
   const [isReplaying, setIsReplaying] = useState(false);
   const [isCodexRunning, setIsCodexRunning] = useState(false);
-  const [notice, setNotice] = useState<string>();
   const [mounted, setMounted] = useState(false);
   const [repoPath, setRepoPath] = useState("Loading repo...");
   const [chatDraft, setChatDraft] = useState("");
@@ -88,7 +87,6 @@ export function AppShell() {
 
   async function runDemoReplay() {
     setIsReplaying(true);
-    setNotice(undefined);
     resetCanvas();
 
     for (const event of mockGraphEvents) {
@@ -97,12 +95,10 @@ export function AppShell() {
     }
 
     setIsReplaying(false);
-    setNotice("Demo replay finished.");
   }
 
   function handleResetCanvas() {
     resetCanvas();
-    setNotice("Canvas reset.");
   }
 
   function appendChatMessage(message: Omit<CodexChatMessage, "id">) {
@@ -135,7 +131,6 @@ export function AppShell() {
         ? `Queued for ${selectedNode.title} with ${describeOptions(options)}.`
         : `Queued for the observed graph with ${describeOptions(options)}.`,
     });
-    setNotice("Codex task started.");
     setIsCodexRunning(true);
     setChatDraft("");
 
@@ -166,13 +161,11 @@ export function AppShell() {
         role: "codex",
         text: data.assistantText?.trim() || "Codex completed the task.",
       });
-      setNotice("Codex task completed.");
     } catch (error) {
       appendChatMessage({
         role: "codex",
         text: error instanceof Error ? error.message : "Codex task failed.",
       });
-      setNotice("Codex task failed.");
     } finally {
       setIsCodexRunning(false);
     }
@@ -192,8 +185,6 @@ export function AppShell() {
   }
 
   async function selectRepo() {
-    setNotice("Opening folder picker...");
-
     try {
       const response = await fetch("/api/repo/select", { method: "POST" });
       const data = (await response.json()) as {
@@ -207,11 +198,8 @@ export function AppShell() {
 
       setRepoPath(data.repoPath);
       resetCanvas();
-      setNotice("Repo selected.");
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "Folder selection failed.",
-      );
+      console.error(error);
     }
   }
 
@@ -252,11 +240,6 @@ export function AppShell() {
                   {repoLabel(repoPath)}
                 </span>
               </button>
-              {notice ? (
-                <div className="inline-flex h-11 items-center rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-500 shadow-sm">
-                  {notice}
-                </div>
-              ) : null}
             </>
           }
           actionControls={
