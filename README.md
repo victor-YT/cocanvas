@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# cocanvas
 
-## Getting Started
+Live feature canvas for Codex-heavy builders.
 
-First, run the development server:
+cocanvas turns a PRD plus Codex activity into a product feature graph that shows what changed, why it changed, and whether the change is backed by evidence.
+
+## User Problem
+
+Codex can move faster than the user can review. Builders need a PRD-aware surface that highlights partial implementation, unrelated edits, missing tests, risky claims, and verified work.
+
+## Demo Flow
+
+1. Select a repo.
+2. Paste the Password Reset PRD.
+3. Generate the initial feature graph.
+4. Start a Codex task.
+5. Replay Codex events.
+6. Watch feature nodes move through changed, risk, verified, and drift states.
+7. Inspect evidence and suggested actions.
+
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Mock Demo
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Click `Run Demo Replay`.
 
-## Learn More
+The replay emits plan updates, file changes, test failure, test pass, and an out-of-scope billing edit. The graph updates without any live Codex integration.
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- Mock-first Codex event adapter
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Planned additions: React Flow, Framer Motion, Zustand, zod, chokidar, simple-git, and `codex exec --json`.
 
-## Deploy on Vercel
+## Current Limitations
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- PRD parsing is mocked.
+- Repo scanning is mocked.
+- Canvas layout is static.
+- Codex adapters are placeholders except mock replay.
+- State is local and in-memory.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Future Work
+
+- Replace static canvas with React Flow.
+- Add structured OpenAI PRD parsing.
+- Normalize real `codex exec --json` events.
+- Add repo watcher and git checkpoint support.
+- Persist graph snapshots as JSON.
