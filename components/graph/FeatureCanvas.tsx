@@ -3,6 +3,7 @@
 import {
   useMemo,
   useState,
+  type ReactNode,
   type PointerEvent,
   type WheelEvent,
 } from "react";
@@ -17,6 +18,9 @@ type FeatureCanvasProps = {
   graph: ObservedGraphState;
   selectedNodeId?: string;
   onSelectNode: (id: string) => void;
+  topControls?: ReactNode;
+  actionControls?: ReactNode;
+  chatPanel?: ReactNode;
 };
 
 type CanvasPoint = {
@@ -216,6 +220,9 @@ export function FeatureCanvas({
   graph,
   selectedNodeId,
   onSelectNode,
+  topControls,
+  actionControls,
+  chatPanel,
 }: FeatureCanvasProps) {
   const [viewport, setViewport] = useState<Viewport>({ x: 64, y: 70, zoom: 0.82 });
   const [panStart, setPanStart] = useState<{
@@ -270,16 +277,11 @@ export function FeatureCanvas({
   }
 
   return (
-    <section className="relative min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm lg:min-h-[calc(100vh-120px)]">
+    <section className="relative min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm lg:min-h-[calc(100vh-24px)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,#d7d8d2_1px,transparent_0)] bg-[size:24px_24px]" />
 
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
-        <div className="rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 shadow-sm">
-          <h2 className="text-sm font-semibold text-zinc-900">Observed Feature Graph</h2>
-          <p className="text-xs text-zinc-500">
-            {graph.nodes.length} nodes, {graph.edges.length} edges
-          </p>
-        </div>
+        {topControls}
         <div className="hidden items-center gap-3 rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-600 shadow-sm md:flex">
           {Object.entries(statusTone).map(([status, tone]) => (
             <div key={status} className="flex items-center gap-1.5">
@@ -290,7 +292,11 @@ export function FeatureCanvas({
         </div>
       </div>
 
-      <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border border-zinc-200 bg-white/95 p-1 shadow-sm">
+      <div className="absolute right-4 top-4 z-30 flex flex-wrap justify-end gap-2">
+        {actionControls}
+      </div>
+
+      <div className="absolute right-4 top-16 z-20 flex items-center gap-1 rounded-xl border border-zinc-200 bg-white/95 p-1 shadow-sm">
         <button
           type="button"
           title="Zoom out"
@@ -321,7 +327,7 @@ export function FeatureCanvas({
       </div>
 
       {selectedNode ? (
-        <div className="absolute bottom-4 left-4 z-20 max-w-sm rounded-xl border border-zinc-200 bg-white/95 p-3 shadow-sm">
+        <div className="absolute bottom-4 left-4 z-20 hidden max-w-sm rounded-xl border border-zinc-200 bg-white/95 p-3 shadow-sm xl:block">
           <div className="text-xs font-medium uppercase text-zinc-500">Selected</div>
           <div className="mt-1 text-sm font-semibold text-zinc-900">
             {selectedNode.title}
@@ -329,6 +335,15 @@ export function FeatureCanvas({
           <p className="mt-1 text-xs leading-5 text-zinc-500">
             {selectedNode.summary ?? nodeTypeLabel[selectedNode.nodeType]}
           </p>
+        </div>
+      ) : null}
+
+      {chatPanel ? (
+        <div
+          className="absolute bottom-5 left-5 right-5 z-30 flex justify-center"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {chatPanel}
         </div>
       ) : null}
 
@@ -343,7 +358,7 @@ export function FeatureCanvas({
         </div>
       ) : (
         <div
-          className={`relative z-10 h-full min-h-[640px] touch-none overflow-hidden ${
+          className={`relative z-10 h-full min-h-[calc(100vh-24px)] touch-none overflow-hidden ${
             panStart ? "cursor-grabbing" : "cursor-grab"
           }`}
           onPointerDown={handlePanStart}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import type { FeatureNode } from "@/lib/types/graph";
+import type { ObservedGraphNode } from "@/lib/types/observedGraph";
 
 export type CodexChatMessage = {
   id: string;
@@ -28,7 +28,7 @@ export type CodexRunOptions = {
 };
 
 type CodexChatPanelProps = {
-  selectedNode?: FeatureNode;
+  selectedNode?: ObservedGraphNode;
   messages: CodexChatMessage[];
   draft: string;
   isReplaying: boolean;
@@ -285,9 +285,9 @@ export function CodexChatPanel({
 
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
   const hasConversation = messages.length > 1;
-  const fileCount = Math.max(5, selectedNode?.artifacts.length ?? 0);
-  const changedFileName = selectedNode?.artifacts[0]?.path.split("/").at(-1) ?? "PrdInput.tsx";
-  const focusLabel = selectedNode?.name ?? "current canvas";
+  const fileCount = Math.max(5, selectedNode?.relatedFiles.length ?? 0);
+  const changedFileName = selectedNode?.relatedFiles[0]?.split("/").at(-1) ?? "route.ts";
+  const focusLabel = selectedNode?.title ?? "current canvas";
 
   const placeholder = hasConversation
     ? "Ask for follow-up changes"

@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
-import { RightTimeline } from "./RightTimeline";
-import { TopBar } from "./TopBar";
+import {
+  CodexChatPanel,
+  type CodexChatMessage,
+  type CodexFunctionId,
+  type CodexRunOptions,
+} from "@/components/codex/CodexChatPanel";
 
 const replayDelayMs = 420;
 
@@ -13,10 +17,20 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const functionPrompts: Record<CodexFunctionId, string> = {
+  plan: "Plan the next implementation steps.",
+  implement: "Implement this feature end-to-end.",
+  edit: "Edit the files needed for this feature only.",
+  test: "Generate and run the relevant tests.",
+  fix: "Fix the latest failing or risky behavior.",
+  review: "Review the graph evidence and summarize risk.",
+  explain: "Explain this feature in product language.",
+  scope: "Check whether the work stayed inside the current run scope.",
+};
+
 export function AppShell() {
   const {
     graph,
-    events,
     selectNode,
     applyGraphEvent,
     resetCanvas,
@@ -25,6 +39,18 @@ export function AppShell() {
   const [currentRun, setCurrentRun] = useState("Demo run");
   const [notice, setNotice] = useState<string>();
   const [mounted, setMounted] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatMessages, setChatMessages] = useState<CodexChatMessage[]>([
+    {
+      id: "codex-welcome",
+      role: "codex",
+      text: "Ask Codex to build, test, review, or explain the observed feature graph.",
+    },
+  ]);
+
+  const selectedNode = graph.nodes.find(
+    (node) => node.id === graph.selectedNodeId,
+  );
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setMounted(true), 0);
@@ -55,6 +81,50 @@ export function AppShell() {
     setNotice("Canvas reset.");
   }
 
+  function appendChatMessage(message: Omit<CodexChatMessage, "id">) {
+    setChatMessages((current) => [
+      ...current,
+      {
+        ...message,
+        id: `chat-${Date.now()}-${current.length}`,
+      },
+    ]);
+  }
+
+  function describeOptions(options: CodexRunOptions) {
+    return `${options.model}, ${options.speed}, ${options.access}`;
+  }
+
+  function submitCodexChat(options: CodexRunOptions) {
+    const prompt = chatDraft.trim();
+
+    if (!prompt) {
+      return;
+    }
+
+    appendChatMessage({ role: "user", text: prompt });
+    appendChatMessage({
+      role: "codex",
+      text: selectedNode
+        ? `Queued for ${selectedNode.title} with ${describeOptions(options)}.`
+        : `Queued for the observed graph with ${describeOptions(options)}.`,
+    });
+    setNotice("Codex task queued.");
+    setChatDraft("");
+  }
+
+  function runCodexFunction(id: CodexFunctionId, options: CodexRunOptions) {
+    const target = selectedNode?.title ?? "the observed graph";
+    const prompt = `${functionPrompts[id]} Target: ${target}.`;
+
+    appendChatMessage({ role: "user", text: prompt });
+    appendChatMessage({
+      role: "codex",
+      text: `Queued ${id} for ${target} with ${describeOptions(options)}.`,
+    });
+    setNotice(`Queued Codex ${id}.`);
+  }
+
   if (!mounted) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#f7f7f4] text-zinc-950">
@@ -66,26 +136,70 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f7f4] text-zinc-950">
-      <TopBar
-        currentRun={currentRun}
-        isReplaying={isReplaying}
-        notice={notice}
-        onCurrentRunChange={setCurrentRun}
-        onRunDemo={runDemoReplay}
-        onRunCodexTask={runCodexTask}
-        onResetCanvas={handleResetCanvas}
-      />
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 lg:grid-cols-[1fr_360px]">
+    <div className="min-h-screen bg-[#f7f7f4] text-zinc-950">
+      <main className="min-h-screen p-3">
         <FeatureCanvas
           graph={graph}
           selectedNodeId={graph.selectedNodeId}
           onSelectNode={selectNode}
-        />
-        <RightTimeline
-          graph={graph}
-          eventCount={events.length}
-          isReplaying={isReplaying}
+          topControls={
+            <>
+              <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-sm shadow-sm">
+                <span className="font-semibold text-zinc-900">cocanvas</span>
+                <span className="ml-2 text-zinc-500">/projects/cocanvas</span>
+              </div>
+              <label className="flex h-10 items-center rounded-full border border-zinc-200 bg-white/95 px-4 text-sm shadow-sm">
+                <span className="mr-2 text-zinc-500">Run</span>
+                <input
+                  value={currentRun}
+                  onChange={(event) => setCurrentRun(event.target.value)}
+                  className="w-28 bg-transparent font-medium text-zinc-900 outline-none"
+                />
+              </label>
+              {notice ? (
+                <div className="rounded-full border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-500 shadow-sm">
+                  {notice}
+                </div>
+              ) : null}
+            </>
+          }
+          actionControls={
+            <>
+              <button
+                type="button"
+                disabled={isReplaying}
+                onClick={runDemoReplay}
+                className="h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              >
+                {isReplaying ? "Replaying" : "Run Demo Replay"}
+              </button>
+              <button
+                type="button"
+                onClick={runCodexTask}
+                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+              >
+                Run Codex Task
+              </button>
+              <button
+                type="button"
+                onClick={handleResetCanvas}
+                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+              >
+                Reset Canvas
+              </button>
+            </>
+          }
+          chatPanel={
+            <CodexChatPanel
+              selectedNode={selectedNode}
+              messages={chatMessages}
+              draft={chatDraft}
+              isReplaying={isReplaying}
+              onDraftChange={setChatDraft}
+              onSubmit={submitCodexChat}
+              onRunFunction={runCodexFunction}
+            />
+          }
         />
       </main>
     </div>
