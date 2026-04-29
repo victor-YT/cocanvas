@@ -237,7 +237,7 @@ function FeatureCanvasInner({
   }, [edges.length, fitView, nodes.length]);
 
   return (
-    <section className="relative min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm lg:min-h-[calc(100vh-24px)]">
+    <section className="relative h-[calc(100vh-24px)] min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
         <div className="hidden items-center gap-3 rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-600 shadow-sm md:flex">
@@ -277,7 +277,7 @@ function FeatureCanvasInner({
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}
-        className="cocanvas-flow"
+        className="cocanvas-flow absolute inset-0 h-full w-full"
       >
         <Background
           variant={BackgroundVariant.Dots}
