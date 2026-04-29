@@ -5,8 +5,11 @@ type TopBarProps = {
   prd: string;
   task: string;
   isReplaying: boolean;
+  isGeneratingGraph: boolean;
+  notice?: string;
   onPrdChange: (value: string) => void;
   onTaskChange: (value: string) => void;
+  onGenerateGraph: () => void;
   onRunDemo: () => void;
 };
 
@@ -14,18 +17,21 @@ export function TopBar({
   prd,
   task,
   isReplaying,
+  isGeneratingGraph,
+  notice,
   onPrdChange,
   onTaskChange,
+  onGenerateGraph,
   onRunDemo,
 }: TopBarProps) {
   return (
     <header className="border-b border-zinc-200 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="min-w-[210px]">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
+          <p className="text-xs font-medium uppercase text-zinc-500">
             cocanvas
           </p>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold">
             Live feature canvas
           </h1>
         </div>
@@ -37,8 +43,18 @@ export function TopBar({
             <div className="truncate text-sm font-medium">
               /projects/cocanvas
             </div>
+            {notice ? (
+              <p className="mt-1 truncate text-xs text-zinc-500" title={notice}>
+                {notice}
+              </p>
+            ) : null}
           </div>
-          <PrdInput value={prd} onChange={onPrdChange} />
+          <PrdInput
+            value={prd}
+            isGenerating={isGeneratingGraph}
+            onChange={onPrdChange}
+            onGenerate={onGenerateGraph}
+          />
           <CodexTaskPanel
             value={task}
             isReplaying={isReplaying}

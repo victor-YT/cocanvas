@@ -13,7 +13,7 @@ export function BottomInspector({ graph, selectedNodeId }: BottomInspectorProps)
 
   return (
     <section className="border-t border-zinc-200 bg-white px-4 py-3 shadow-[0_-8px_30px_rgba(15,23,42,0.04)]">
-      <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr_0.8fr]">
+      <div className="mx-auto grid max-w-[1600px] gap-3 lg:grid-cols-[1.1fr_1fr_0.8fr]">
         <EvidencePanel node={selectedNode} />
         <RiskPanel node={selectedNode} />
         <NodeActions node={selectedNode} />

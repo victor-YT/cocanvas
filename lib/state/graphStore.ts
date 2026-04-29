@@ -17,9 +17,13 @@ export function useGraphStore(initialState: GraphState = mockGraph) {
     setGraph((current) => updateGraphFromCodexEvent(current, event));
   }, []);
 
+  const replaceGraph = useCallback((nextGraph: GraphState) => {
+    setGraph(structuredClone(nextGraph));
+  }, []);
+
   const resetGraph = useCallback(() => {
     setGraph(structuredClone(initialState));
   }, [initialState]);
 
-  return { graph, selectNode, applyEvent, resetGraph };
+  return { graph, selectNode, applyEvent, replaceGraph, resetGraph };
 }

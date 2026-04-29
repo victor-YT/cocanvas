@@ -26,7 +26,8 @@ export function NodeActions({ node }: NodeActionsProps) {
           <button
             key={action}
             type="button"
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-100"
+            disabled={!node}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
           >
             {action}
           </button>

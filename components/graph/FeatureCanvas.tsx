@@ -14,89 +14,116 @@ export function FeatureCanvas({
   selectedNodeId,
   onSelectNode,
 }: FeatureCanvasProps) {
-  const passwordReset = graph.features.find(
-    (feature) => feature.id === "feature-password-reset",
-  );
-  const auth = graph.features.find((feature) => feature.id === "feature-auth");
+  const scopedFeatures = graph.features.filter((feature) => feature.status !== "drift");
   const driftNodes = graph.features.filter((feature) => feature.status === "drift");
+  const selectedFeature =
+    graph.features.find((feature) => feature.id === selectedNodeId) ??
+    scopedFeatures[0];
+  const activeArtifactCount = selectedFeature?.artifacts.length ?? 0;
 
   return (
-    <section className="relative min-h-[520px] overflow-hidden rounded-lg border border-zinc-200 bg-[radial-gradient(circle_at_1px_1px,#d4d4d8_1px,transparent_0)] bg-[size:28px_28px] shadow-sm">
+    <section className="relative min-h-[540px] overflow-hidden rounded-lg border border-zinc-200 bg-[radial-gradient(circle_at_1px_1px,#d4d4d8_1px,transparent_0)] bg-[size:28px_28px] shadow-sm">
       <div className="absolute inset-0 bg-white/70" />
-      <div className="relative flex h-full min-h-[520px] flex-col p-5">
-        <div className="mb-5 flex items-center justify-between gap-3">
+      <div className="relative flex h-full min-h-[540px] flex-col p-4 sm:p-5">
+        <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">Feature Graph</h2>
-            <p className="text-sm text-zinc-500">PRD-aware status map</p>
+            <h2 className="text-lg font-semibold">Feature Graph</h2>
+            <p className="text-sm text-zinc-500">
+              {selectedFeature
+                ? `${selectedFeature.name} with ${activeArtifactCount} linked artifacts`
+                : "Generate a graph from the PRD"}
+            </p>
           </div>
           <GraphLegend />
         </div>
 
-        <div className="relative flex-1">
-          <div className="absolute left-4 top-20 h-px w-[68%] bg-zinc-300" />
-          <div className="absolute left-[38%] top-[178px] h-px w-[24%] bg-zinc-300" />
-          <div className="absolute left-[38%] top-[258px] h-px w-[24%] bg-zinc-300" />
-          <div className="absolute left-[38%] top-[338px] h-px w-[24%] bg-zinc-300" />
-
-          <div className="absolute left-0 top-8">
-            <FeatureNode
-              id="prd-root"
-              name="PRD"
-              status="verified"
-              source="prd"
-              selected={selectedNodeId === "prd-root"}
-              onSelect={() => undefined}
-            />
-          </div>
-          {auth ? (
-            <div className="absolute left-[24%] top-8">
-              <FeatureNode
-                id={auth.id}
-                name={auth.name}
-                status={auth.status}
-                source={auth.source}
-                selected={selectedNodeId === auth.id}
-                onSelect={() => onSelectNode(auth.id)}
-              />
+        {scopedFeatures.length === 0 ? (
+          <div className="grid flex-1 place-items-center rounded-lg border border-dashed border-zinc-300 bg-white/70 p-8 text-center">
+            <div>
+              <p className="text-sm font-semibold text-zinc-900">No features yet</p>
+              <p className="mt-1 max-w-sm text-sm text-zinc-500">
+                Paste a PRD and generate a graph to create the first product-level node.
+              </p>
             </div>
-          ) : null}
-          {passwordReset ? (
-            <div className="absolute left-[50%] top-8">
-              <FeatureNode
-                id={passwordReset.id}
-                name={passwordReset.name}
-                status={passwordReset.status}
-                source={passwordReset.source}
-                selected={selectedNodeId === passwordReset.id}
-                onSelect={() => onSelectNode(passwordReset.id)}
-              />
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col justify-between gap-5">
+            <div className="grid gap-4 lg:grid-cols-[210px_1fr_280px] lg:items-start">
+              <div className="relative">
+                <div className="hidden absolute left-full top-12 h-px w-8 bg-zinc-300 lg:block" />
+                <FeatureNode
+                  id="prd-root"
+                  name="PRD"
+                  status="verified"
+                  source="prd"
+                  selected={false}
+                  onSelect={() => undefined}
+                />
+              </div>
+
+              <div className="relative grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="hidden absolute -left-5 top-12 h-px w-5 bg-zinc-300 lg:block" />
+                {scopedFeatures.map((feature) => (
+                  <FeatureNode
+                    key={feature.id}
+                    id={feature.id}
+                    name={feature.name}
+                    status={feature.status}
+                    source={feature.source}
+                    selected={selectedNodeId === feature.id}
+                    onSelect={() => onSelectNode(feature.id)}
+                  />
+                ))}
+              </div>
+
+              <div className="rounded-lg border border-zinc-200 bg-white/90 p-3 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Artifacts</h3>
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                    {activeArtifactCount}
+                  </span>
+                </div>
+                {selectedFeature?.artifacts.length ? (
+                  <div className="grid gap-2">
+                    {selectedFeature.artifacts.map((artifact) => (
+                      <ArtifactNode
+                        key={artifact.id}
+                        artifact={artifact}
+                        active={selectedFeature.status !== "not_started"}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-3 text-sm text-zinc-500">
+                    Repo scan evidence will attach implementation files here.
+                  </div>
+                )}
+              </div>
             </div>
-          ) : null}
 
-          <div className="absolute left-[68%] top-[128px] grid w-[220px] gap-3">
-            {passwordReset?.artifacts.map((artifact) => (
-              <ArtifactNode
-                key={artifact.id}
-                artifact={artifact}
-                active={passwordReset.status !== "not_started"}
-              />
-            ))}
+            {driftNodes.length > 0 ? (
+              <div className="border-t border-zinc-200 pt-4">
+                <div className="mb-2 text-xs font-semibold uppercase text-zinc-500">
+                  Out-of-scope drift
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {driftNodes.map((node) => (
+                    <FeatureNode
+                      key={node.id}
+                      id={node.id}
+                      name={node.name}
+                      status={node.status}
+                      source={node.source}
+                      selected={selectedNodeId === node.id}
+                      onSelect={() => onSelectNode(node.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
+        )}
 
-          <div className="absolute bottom-4 left-4 flex flex-wrap gap-3">
-            {driftNodes.map((node) => (
-              <FeatureNode
-                key={node.id}
-                id={node.id}
-                name={node.name}
-                status={node.status}
-                source={node.source}
-                selected={selectedNodeId === node.id}
-                onSelect={() => onSelectNode(node.id)}
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );

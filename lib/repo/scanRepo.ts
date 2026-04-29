@@ -93,7 +93,14 @@ async function walkRepo(root: string, dir = root, files: string[] = []) {
 }
 
 export async function scanRepo(repoPath: string): Promise<ArtifactRef[]> {
-  const root = resolve(/* turbopackIgnore: true */ repoPath || ".");
+  const workspaceRoot = process.cwd();
+  const requestedRoot = resolve(
+    /* turbopackIgnore: true */ workspaceRoot,
+    repoPath || ".",
+  );
+  const root = requestedRoot.startsWith(workspaceRoot)
+    ? requestedRoot
+    : workspaceRoot;
 
   try {
     const rootStat = await stat(root);
