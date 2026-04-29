@@ -1,4 +1,4 @@
-import type { FeatureStatus, FeatureNode as FeatureNodeType } from "@/lib/types/graph";
+import type { FeatureStatus } from "@/lib/types/graph";
 
 const statusClass: Record<FeatureStatus, { card: string; dot: string; label: string }> = {
   not_started: {
@@ -31,7 +31,6 @@ const statusClass: Record<FeatureStatus, { card: string; dot: string; label: str
 type FeatureNodeProps = {
   id: string;
   name: string;
-  source: FeatureNodeType["source"];
   status: FeatureStatus;
   selected: boolean;
   onSelect: () => void;
@@ -39,7 +38,6 @@ type FeatureNodeProps = {
 
 export function FeatureNode({
   name,
-  source,
   status,
   selected,
   onSelect,
@@ -58,7 +56,7 @@ export function FeatureNode({
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[15px] font-semibold">{name}</span>
         <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium uppercase">
-          {source}
+          Feature
         </span>
       </div>
       <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-zinc-500">

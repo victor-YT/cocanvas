@@ -4,6 +4,10 @@ type EvidencePanelProps = {
   node?: FeatureNode;
 };
 
+function evidenceTitle(title: string) {
+  return title === "PRD source" ? "Feature source" : title;
+}
+
 export function EvidencePanel({ node }: EvidencePanelProps) {
   const latestEvidence = node?.evidence.slice(-4) ?? [];
 
@@ -22,7 +26,7 @@ export function EvidencePanel({ node }: EvidencePanelProps) {
           ) : (
             latestEvidence.map((item) => (
               <div key={item.id} className="rounded-lg bg-white p-2 text-xs shadow-sm">
-                <p className="font-medium text-zinc-800">{item.title}</p>
+                <p className="font-medium text-zinc-800">{evidenceTitle(item.title)}</p>
                 <p className="mt-1 text-zinc-500">{item.detail}</p>
               </div>
             ))

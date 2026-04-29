@@ -12,12 +12,8 @@ export type CodexChatMessage = {
 export type CodexFunctionId =
   | "plan"
   | "implement"
-  | "edit"
   | "test"
-  | "fix"
-  | "review"
-  | "explain"
-  | "scope";
+  | "review";
 
 export type CodexRunOptions = {
   model: "auto" | "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini";
@@ -286,7 +282,8 @@ export function CodexChatPanel({
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
   const hasConversation = messages.length > 1;
   const fileCount = Math.max(5, selectedNode?.artifacts.length ?? 0);
-  const changedFileName = selectedNode?.artifacts[0]?.path.split("/").at(-1) ?? "PrdInput.tsx";
+  const changedFileName =
+    selectedNode?.artifacts[0]?.path.split("/").at(-1) ?? "FeatureCanvas.tsx";
   const focusLabel = selectedNode?.name ?? "current canvas";
 
   const placeholder = hasConversation

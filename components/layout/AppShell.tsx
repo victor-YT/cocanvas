@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { MockCodexEventSource } from "@/lib/codex/MockCodexEventSource";
 import { mockGraph } from "@/lib/demo/mockGraph";
-import { mockCodexTask, mockPrd } from "@/lib/demo/mockPrd";
+import { mockCodexTask } from "@/lib/demo/mockPrd";
 import { useCanvasEventStream } from "@/lib/hooks/useCanvasEventStream";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphState } from "@/lib/types/graph";
@@ -17,14 +17,10 @@ import { TopBar } from "./TopBar";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
 
 const functionPrompts: Record<CodexFunctionId, string> = {
-  plan: "Plan the next implementation steps.",
+  plan: "Plan the next feature-first implementation steps.",
   implement: "Implement this feature end-to-end.",
-  edit: "Edit the files needed for this feature only.",
-  test: "Generate and run the relevant tests.",
-  fix: "Fix the latest failing or risky behavior.",
-  review: "Review the diff and summarize evidence.",
-  explain: "Explain this feature in product language.",
-  scope: "Check whether the work stayed inside PRD scope.",
+  test: "Run the relevant checks for this feature.",
+  review: "Review the feature diff and summarize evidence.",
 };
 
 const configuredLiveCanvasApiUrl =
@@ -41,19 +37,15 @@ type AppShellProps = {
 export function AppShell({ initialGraph }: AppShellProps) {
   const { graph, selectNode, applyEvent, replaceGraph } = useGraphStore(initialGraph);
   const [isReplaying, setIsReplaying] = useState(false);
-  const [isGeneratingGraph, setIsGeneratingGraph] = useState(false);
-  const [prd, setPrd] = useState(mockPrd);
   const [task, setTask] = useState(mockCodexTask);
-  const [baselineGraph, setBaselineGraph] = useState<GraphState>(
-    initialGraph ?? mockGraph,
-  );
+  const [baselineGraph] = useState<GraphState>(initialGraph ?? mockGraph);
   const [notice, setNotice] = useState<string>();
   const [chatDraft, setChatDraft] = useState("");
   const [chatMessages, setChatMessages] = useState<CodexChatMessage[]>([
     {
       id: "codex-welcome",
       role: "codex",
-      text: "I can plan, implement, edit files, run tests, fix failures, review diffs, explain changes, and guard scope. Select a feature or ask me what to do next.",
+      text: "Select a feature node, then plan, build, test, or review it with canvas context.",
     },
   ]);
 
@@ -91,32 +83,6 @@ export function AppShell({ initialGraph }: AppShellProps) {
         id: `chat-${Date.now()}-${current.length}`,
       },
     ]);
-  }
-
-  async function generateGraph() {
-    setIsGeneratingGraph(true);
-    setNotice(undefined);
-
-    try {
-      const response = await fetch("/api/parse-prd", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prd }),
-      });
-
-      if (!response.ok) {
-        throw new Error("The PRD parser returned an error.");
-      }
-
-      const body = (await response.json()) as { graph: GraphState };
-      setBaselineGraph(body.graph);
-      replaceGraph(body.graph);
-      setNotice("Graph generated from the pasted PRD.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not generate graph.");
-    } finally {
-      setIsGeneratingGraph(false);
-    }
   }
 
   async function runDemoReplay() {
@@ -207,7 +173,7 @@ export function AppShell({ initialGraph }: AppShellProps) {
     appendChatMessage({ role: "user", text: prompt });
     appendChatMessage({
       role: "codex",
-      text: `Queued ${id} for ${target} with ${describeOptions(options)}. The backend SDK route can execute this with PRD, graph, selected feature, timeline, and repo context.`,
+      text: `Queued ${id} for ${target} with ${describeOptions(options)}. The backend SDK route can execute this with graph, selected feature, timeline, and repo context.`,
     });
     setNotice(`Queued Codex ${id} for ${target}.`);
   }
@@ -215,15 +181,12 @@ export function AppShell({ initialGraph }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-[#f4f5f2] text-zinc-950">
       <TopBar
-        prd={prd}
         task={task}
         isReplaying={isReplaying}
-        isGeneratingGraph={isGeneratingGraph}
         notice={notice}
-        onPrdChange={setPrd}
         onTaskChange={setTask}
-        onGenerateGraph={generateGraph}
         onRunDemo={runDemoReplay}
+        featureCount={graph.features.filter((feature) => feature.status !== "drift").length}
       />
       <main className="min-h-0 flex-1 p-3">
         <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">

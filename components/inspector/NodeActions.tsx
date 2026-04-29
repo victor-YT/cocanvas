@@ -2,12 +2,10 @@ import type { FeatureNode } from "@/lib/types/graph";
 import type { CodexFunctionId } from "@/components/codex/CodexChatPanel";
 
 const actions: Array<{ label: string; functionId: CodexFunctionId }> = [
-  { label: "Explain", functionId: "explain" },
-  { label: "Improve", functionId: "implement" },
-  { label: "Generate missing test", functionId: "test" },
-  { label: "Redo this part", functionId: "fix" },
-  { label: "Show evidence", functionId: "review" },
-  { label: "Freeze scope", functionId: "scope" },
+  { label: "Plan", functionId: "plan" },
+  { label: "Build", functionId: "implement" },
+  { label: "Test", functionId: "test" },
+  { label: "Review", functionId: "review" },
 ];
 
 type NodeActionsProps = {

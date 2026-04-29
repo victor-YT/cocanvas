@@ -32,7 +32,7 @@ const defaultRunOptions: CodexRunOptions = {
 
 const actionButtons: Array<{ id: CodexFunctionId; label: string }> = [
   { id: "plan", label: "Plan" },
-  { id: "implement", label: "Implement" },
+  { id: "implement", label: "Build" },
   { id: "test", label: "Test" },
   { id: "review", label: "Review" },
 ];
@@ -59,6 +59,10 @@ function timelineMatchesNode(event: CodexTimelineEvent, node?: FeatureNode) {
 
   const artifactPaths = new Set(node.artifacts.map((artifact) => artifact.path));
   return event.paths?.some((path) => artifactPaths.has(path)) ?? false;
+}
+
+function evidenceTitle(title: string) {
+  return title === "PRD source" ? "Feature source" : title;
 }
 
 export function NodeSidePanel({
@@ -175,7 +179,7 @@ export function NodeSidePanel({
               ))
             ) : (
               <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-3 text-sm text-zinc-500">
-                Acceptance criteria will appear when the PRD parser creates them.
+                Acceptance criteria will appear when feature context is attached.
               </div>
             )}
           </div>
@@ -187,7 +191,7 @@ export function NodeSidePanel({
             {latestEvidence.length > 0 ? (
               latestEvidence.map((item) => (
                 <div key={item.id} className="rounded-lg bg-zinc-50 p-3 text-sm">
-                  <p className="font-medium text-zinc-800">{item.title}</p>
+                  <p className="font-medium text-zinc-800">{evidenceTitle(item.title)}</p>
                   <p className="mt-1 line-clamp-3 text-xs leading-5 text-zinc-500">
                     {item.detail}
                   </p>

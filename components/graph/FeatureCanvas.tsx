@@ -50,7 +50,6 @@ type NodeDrag = {
 const BOARD_WIDTH = 1280;
 const BOARD_HEIGHT = 820;
 const FEATURE_WIDTH = 250;
-const ROOT_ID = "prd-root";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -58,22 +57,20 @@ function clamp(value: number, min: number, max: number) {
 
 function defaultFeaturePosition(index: number): CanvasPoint {
   return {
-    x: 320 + (index % 3) * 240,
+    x: 120 + (index % 3) * 300,
     y: 150 + Math.floor(index / 3) * 185,
   };
 }
 
 function defaultDriftPosition(index: number): CanvasPoint {
   return {
-    x: 320 + index * 240,
-    y: 320,
+    x: 120 + index * 300,
+    y: 520,
   };
 }
 
 function buildDefaultPositions(graph: GraphState) {
-  const positions: Record<string, CanvasPoint> = {
-    [ROOT_ID]: { x: 120, y: 250 },
-  };
+  const positions: Record<string, CanvasPoint> = {};
   const features = graph.features.filter((feature) => feature.status !== "drift");
   const driftNodes = graph.features.filter((feature) => feature.status === "drift");
 
@@ -115,7 +112,8 @@ function CanvasEdge({
   const startY = from.y + 48;
   const endX = to.x;
   const endY = to.y + 48;
-  const midX = startX + Math.max(80, (endX - startX) / 2);
+  const midX =
+    endX >= startX ? startX + Math.max(80, (endX - startX) / 2) : (startX + endX) / 2;
   const d = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
 
   return (
@@ -161,13 +159,13 @@ function ArtifactStack({
 }) {
   return (
     <div
-      className="absolute w-[300px] rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-sm"
+      className="absolute w-[300px] rounded-lg border border-zinc-200 bg-white/95 p-3 shadow-sm"
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900">Landing evidence</h3>
+          <h3 className="text-sm font-semibold text-zinc-900">Feature evidence</h3>
           <p className="text-xs text-zinc-500">
             {feature ? feature.name : "Selected feature"}
           </p>
@@ -191,7 +189,7 @@ function ArtifactStack({
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
           Evidence will attach here when this feature maps to implementation work.
         </div>
       )}
@@ -223,14 +221,9 @@ export function FeatureCanvas({
     ? positions[selectedFeature.id] ?? defaultFeaturePosition(0)
     : undefined;
   const artifactPosition: CanvasPoint = {
-    x: Math.min(
-      780,
-      Math.max(500, (selectedPosition?.x ?? 320) + 140),
-    ),
+    x: clamp((selectedPosition?.x ?? 180) - 40, 120, BOARD_WIDTH - 340),
     y: Math.max(120, (selectedPosition?.y ?? 150) + 145),
   };
-  const rootPosition = positions[ROOT_ID] ?? { x: 120, y: 250 };
-
   function resetView() {
     setViewport({ x: 48, y: 92, zoom: 0.76 });
     setCustomPositions({});
@@ -347,27 +340,27 @@ export function FeatureCanvas({
   }
 
   return (
-    <section className="relative min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-[#f7f7f4] shadow-sm lg:min-h-[calc(100vh-120px)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,#d7d8d2_1px,transparent_0)] bg-[size:24px_24px]" />
+    <section className="relative min-h-[640px] overflow-hidden rounded-xl border border-zinc-200 bg-[#f8f8f6] shadow-sm lg:min-h-[calc(100vh-124px)]">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(#e4e5df_1px,transparent_1px),linear-gradient(90deg,#e4e5df_1px,transparent_1px)] bg-[size:32px_32px]" />
 
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
-        <div className="rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 shadow-sm">
+        <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 shadow-sm">
           <h2 className="text-sm font-semibold text-zinc-900">Feature map</h2>
           <p className="text-xs text-zinc-500">
             {selectedFeature
               ? `${selectedFeature.name} is ${selectedFeature.status.replace("_", " ")}`
-              : "Generate a graph from the PRD"}
+              : "Create or select a feature node"}
           </p>
         </div>
         <GraphLegend />
       </div>
 
-      <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border border-zinc-200 bg-white/95 p-1 shadow-sm">
+      <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-lg border border-zinc-200 bg-white/95 p-1 shadow-sm">
         <button
           type="button"
           title="Zoom out"
           onClick={() => zoomTo(viewport.zoom - 0.12)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
+          className="grid h-8 w-8 place-items-center rounded-md text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
         >
           -
         </button>
@@ -378,7 +371,7 @@ export function FeatureCanvas({
           type="button"
           title="Zoom in"
           onClick={() => zoomTo(viewport.zoom + 0.12)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
+          className="grid h-8 w-8 place-items-center rounded-md text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
         >
           +
         </button>
@@ -386,7 +379,7 @@ export function FeatureCanvas({
           type="button"
           title="Reset canvas"
           onClick={resetView}
-          className="h-8 rounded-lg px-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+          className="h-8 rounded-md px-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
         >
           Fit
         </button>
@@ -411,7 +404,7 @@ export function FeatureCanvas({
               No feature nodes yet.
             </p>
             <p className="mt-1 text-xs leading-5 text-zinc-500">
-              Paste a PRD and generate a graph to add the first node.
+              Feature nodes will appear here from the live canvas backend.
             </p>
           </div>
         </div>
@@ -442,13 +435,6 @@ export function FeatureCanvas({
               height={BOARD_HEIGHT}
               aria-hidden="true"
             >
-              {scopedFeatures.map((feature) => (
-                <CanvasEdge
-                  key={`${ROOT_ID}-${feature.id}`}
-                  from={rootPosition}
-                  to={positions[feature.id] ?? defaultFeaturePosition(0)}
-                />
-              ))}
               {selectedPosition ? (
                 <CanvasEdge
                   from={selectedPosition}
@@ -457,21 +443,6 @@ export function FeatureCanvas({
                 />
               ) : null}
             </svg>
-
-            <CanvasNode
-              id={ROOT_ID}
-              position={rootPosition}
-              onDragStart={handleNodeDragStart}
-            >
-              <FeatureNode
-                id={ROOT_ID}
-                name="PRD"
-                status="verified"
-                source="prd"
-                selected={false}
-                onSelect={() => undefined}
-              />
-            </CanvasNode>
 
             {scopedFeatures.map((feature) => (
               <CanvasNode
@@ -484,7 +455,6 @@ export function FeatureCanvas({
                   id={feature.id}
                   name={feature.name}
                   status={feature.status}
-                  source={feature.source}
                   selected={selectedNodeId === feature.id}
                   onSelect={() => selectFeature(feature.id)}
                 />
@@ -502,7 +472,6 @@ export function FeatureCanvas({
                   id={feature.id}
                   name={feature.name}
                   status={feature.status}
-                  source={feature.source}
                   selected={selectedNodeId === feature.id}
                   onSelect={() => selectFeature(feature.id)}
                 />

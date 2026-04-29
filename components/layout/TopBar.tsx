@@ -1,60 +1,45 @@
 import { CodexTaskPanel } from "@/components/codex/CodexTaskPanel";
-import { PrdInput } from "@/components/prd/PrdInput";
 
 type TopBarProps = {
-  prd: string;
   task: string;
   isReplaying: boolean;
-  isGeneratingGraph: boolean;
   notice?: string;
-  onPrdChange: (value: string) => void;
   onTaskChange: (value: string) => void;
-  onGenerateGraph: () => void;
   onRunDemo: () => void;
+  featureCount: number;
 };
 
 export function TopBar({
-  prd,
   task,
   isReplaying,
-  isGeneratingGraph,
   notice,
-  onPrdChange,
   onTaskChange,
-  onGenerateGraph,
   onRunDemo,
+  featureCount,
 }: TopBarProps) {
   return (
-    <header className="border-b border-zinc-200 bg-white/92 px-3 py-2 shadow-sm backdrop-blur">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-        <div className="min-w-[180px]">
-          <p className="text-xs font-medium uppercase text-zinc-500">
-            cocanvas
-          </p>
-          <h1 className="text-lg font-semibold">
-            Live feature canvas
+    <header className="border-b border-zinc-200/80 bg-white/88 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+        <div className="min-w-[240px]">
+          <p className="text-xs font-semibold uppercase text-zinc-500">cocanvas</p>
+          <h1 className="text-xl font-semibold tracking-normal text-zinc-950">
+            Feature canvas
           </h1>
         </div>
-        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-[minmax(150px,0.32fr)_minmax(320px,1fr)_minmax(320px,1fr)]">
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2">
-            <label className="mb-1 block text-xs font-medium text-zinc-500">
-              Repo
-            </label>
-            <div className="truncate text-sm font-medium text-zinc-900">
-              /projects/cocanvas
-            </div>
-            {notice ? (
+        <div className="grid flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(220px,0.42fr)_minmax(360px,1fr)]">
+          <div className="flex min-h-16 items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-zinc-900">
+                /projects/cocanvas
+              </div>
               <p className="mt-1 truncate text-xs text-zinc-500" title={notice}>
-                {notice}
+                {notice ?? "Canvas is ready for feature-first work."}
               </p>
-            ) : null}
+            </div>
+            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 shadow-sm">
+              {featureCount} features
+            </span>
           </div>
-          <PrdInput
-            value={prd}
-            isGenerating={isGeneratingGraph}
-            onChange={onPrdChange}
-            onGenerate={onGenerateGraph}
-          />
           <CodexTaskPanel
             value={task}
             isReplaying={isReplaying}

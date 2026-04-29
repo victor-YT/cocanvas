@@ -20,7 +20,7 @@ export function RiskPanel({ node }: RiskPanelProps) {
           <div className="mt-3 grid gap-2">
             {criteria.length === 0 ? (
               <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-3 text-xs text-zinc-500">
-                Acceptance criteria will populate from the PRD parser.
+                Acceptance criteria will populate from attached feature context.
               </div>
             ) : (
               criteria.map((criterion) => (
