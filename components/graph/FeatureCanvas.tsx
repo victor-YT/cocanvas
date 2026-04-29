@@ -6,6 +6,7 @@ import {
   BackgroundVariant,
   Controls,
   MarkerType,
+  PanOnScrollMode,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -15,6 +16,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import type {
+  ObservedGraphEdge,
   ObservedGraphNode,
   ObservedGraphState,
   ObservedNodeStatus,
@@ -83,42 +85,131 @@ const nodeTypeLabel: Record<ObservedNodeType, string> = {
   cluster: "Unlinked Cluster",
 };
 
-function defaultPosition(node: ObservedGraphNode, index: number) {
-  if (node.nodeType === "feature") {
-    return { x: 0, y: 310 };
+const layerGapX = 390;
+const nodeGapY = 195;
+const canvasCenterY = 340;
+
+function visualEdge(edge: ObservedGraphEdge) {
+  if (edge.relation === "supports" || edge.relation === "blocks") {
+    return {
+      from: edge.to,
+      to: edge.from,
+    };
   }
 
-  if (node.nodeType === "flow") {
-    return { x: 390, y: 80 + index * 195 };
+  return {
+    from: edge.from,
+    to: edge.to,
+  };
+}
+
+function nodeSortWeight(node: ObservedGraphNode) {
+  const weights: Record<ObservedNodeType, number> = {
+    feature: 0,
+    flow: 1,
+    capability: 2,
+    evidence: 3,
+    risk: 4,
+    cluster: 5,
+  };
+
+  return weights[node.nodeType];
+}
+
+function buildNodePositions(graph: ObservedGraphState) {
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const nodeOrder = new Map(graph.nodes.map((node, index) => [node.id, index]));
+  const usableEdges = graph.edges
+    .map(visualEdge)
+    .filter((edge) => nodesById.has(edge.from) && nodesById.has(edge.to));
+
+  const incomingCount = new Map(graph.nodes.map((node) => [node.id, 0]));
+  const parentIds = new Map<string, string[]>();
+
+  usableEdges.forEach((edge) => {
+    incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
+    parentIds.set(edge.to, [...(parentIds.get(edge.to) ?? []), edge.from]);
+  });
+
+  const depthById = new Map(graph.nodes.map((node) => [node.id, 0]));
+
+  for (let pass = 0; pass < graph.nodes.length; pass += 1) {
+    usableEdges.forEach((edge) => {
+      const nextDepth = (depthById.get(edge.from) ?? 0) + 1;
+      if (nextDepth > (depthById.get(edge.to) ?? 0)) {
+        depthById.set(edge.to, nextDepth);
+      }
+    });
   }
 
-  if (node.nodeType === "capability") {
-    return { x: 390, y: 650 + index * 195 };
-  }
+  const maxLinkedDepth = Math.max(
+    0,
+    ...usableEdges.flatMap((edge) => [
+      depthById.get(edge.from) ?? 0,
+      depthById.get(edge.to) ?? 0,
+    ]),
+  );
 
-  if (node.nodeType === "risk") {
-    return { x: 830, y: 165 + index * 185 };
-  }
+  graph.nodes.forEach((node) => {
+    const isIsolated = !usableEdges.some(
+      (edge) => edge.from === node.id || edge.to === node.id,
+    );
 
-  if (node.nodeType === "evidence") {
-    return { x: 830, y: 550 + index * 185 };
-  }
+    if (isIsolated && node.nodeType === "cluster") {
+      depthById.set(node.id, maxLinkedDepth + 1);
+    }
+  });
 
-  return { x: 1240, y: 310 + index * 190 };
+  const layers = new Map<number, ObservedGraphNode[]>();
+  graph.nodes.forEach((node) => {
+    const depth = depthById.get(node.id) ?? 0;
+    layers.set(depth, [...(layers.get(depth) ?? []), node]);
+  });
+
+  const positionById = new Map<string, { x: number; y: number }>();
+
+  [...layers.entries()]
+    .sort(([depthA], [depthB]) => depthA - depthB)
+    .forEach(([depth, layerNodes]) => {
+      const orderedNodes = [...layerNodes].sort((nodeA, nodeB) => {
+        const parentA = parentIds.get(nodeA.id)?.[0];
+        const parentB = parentIds.get(nodeB.id)?.[0];
+        const parentYA = parentA ? positionById.get(parentA)?.y : undefined;
+        const parentYB = parentB ? positionById.get(parentB)?.y : undefined;
+
+        if (parentYA !== undefined && parentYB !== undefined && parentYA !== parentYB) {
+          return parentYA - parentYB;
+        }
+
+        if (nodeSortWeight(nodeA) !== nodeSortWeight(nodeB)) {
+          return nodeSortWeight(nodeA) - nodeSortWeight(nodeB);
+        }
+
+        return (nodeOrder.get(nodeA.id) ?? 0) - (nodeOrder.get(nodeB.id) ?? 0);
+      });
+
+      const layerTop = canvasCenterY - ((orderedNodes.length - 1) * nodeGapY) / 2;
+
+      orderedNodes.forEach((node, index) => {
+        positionById.set(node.id, {
+          x: depth * layerGapX,
+          y: layerTop + index * nodeGapY,
+        });
+      });
+    });
+
+  return positionById;
 }
 
 function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasNode[] {
-  const typeCounts: Partial<Record<ObservedNodeType, number>> = {};
+  const positionById = buildNodePositions(graph);
 
   return graph.nodes.map((node) => {
-    const index = typeCounts[node.nodeType] ?? 0;
-    typeCounts[node.nodeType] = index + 1;
-
     return {
       id: node.id,
       type: "observed",
       data: { observedNode: node },
-      position: defaultPosition(node, index),
+      position: positionById.get(node.id) ?? { x: 0, y: canvasCenterY },
       selected: selectedNodeId === node.id,
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
@@ -143,31 +234,35 @@ function edgeStyle(relation: string) {
 }
 
 function buildEdges(graph: ObservedGraphState): Edge[] {
-  return graph.edges.map((edge) => ({
-    id: edge.id,
-    source: edge.from,
-    target: edge.to,
-    type: "smoothstep",
-    label: edge.label ?? edge.relation,
-    animated: edge.relation === "supports" || edge.relation === "blocks",
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      color: edgeStyle(edge.relation).stroke,
-      width: 16,
-      height: 16,
-    },
-    style: edgeStyle(edge.relation),
-    labelStyle: {
-      fill: "#71717a",
-      fontSize: 11,
-      fontWeight: 600,
-    },
-    labelBgStyle: {
-      fill: "rgba(255, 255, 255, 0.86)",
-    },
-    labelBgPadding: [8, 4],
-    labelBgBorderRadius: 8,
-  }));
+  return graph.edges.map((edge) => {
+    const displayEdge = visualEdge(edge);
+
+    return {
+      id: edge.id,
+      source: displayEdge.from,
+      target: displayEdge.to,
+      type: "smoothstep",
+      label: edge.label ?? edge.relation,
+      animated: edge.relation === "supports" || edge.relation === "blocks",
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: edgeStyle(edge.relation).stroke,
+        width: 16,
+        height: 16,
+      },
+      style: edgeStyle(edge.relation),
+      labelStyle: {
+        fill: "#71717a",
+        fontSize: 11,
+        fontWeight: 600,
+      },
+      labelBgStyle: {
+        fill: "rgba(255, 255, 255, 0.86)",
+      },
+      labelBgPadding: [8, 4],
+      labelBgBorderRadius: 8,
+    };
+  });
 }
 
 function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
@@ -282,6 +377,7 @@ function FeatureCanvasInner({
         maxZoom={1.6}
         panOnDrag
         panOnScroll
+        panOnScrollMode={PanOnScrollMode.Free}
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
