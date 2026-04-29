@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FolderGit2 } from "lucide-react";
 import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphEvent, ObservedGraphNode } from "@/lib/types/observedGraph";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
-import { CodexChatPanel, type CodexRunOptions } from "@/components/codex/CodexChatPanel";
+import {
+  CodexChatPanel,
+  type CodexComposerInput,
+  type CodexRunOptions,
+  type FeatureMentionInsertRequest,
+} from "@/components/codex/CodexChatPanel";
 import {
   CodexRunStatusBar,
   type CodexRunStatus,
@@ -34,6 +39,32 @@ function replayDelayForEvent(event: (typeof mockGraphEvents)[number]) {
   }
 
   return updateReplayDelayMs;
+}
+
+function replayBatchAt(index: number) {
+  const event = mockGraphEvents[index];
+  const batch = [event];
+  let nextIndex = index + 1;
+
+  while (event?.type === "node.upsert" && nextIndex < mockGraphEvents.length) {
+    const nextEvent = mockGraphEvents[nextIndex];
+
+    if (
+      nextEvent.type !== "edge.upsert" ||
+      nextEvent.edge.relation !== "contains" ||
+      nextEvent.edge.to !== event.node.id
+    ) {
+      break;
+    }
+
+    batch.push(nextEvent);
+    nextIndex += 1;
+  }
+
+  return {
+    batch,
+    nextIndex,
+  };
 }
 
 function formatElapsed(ms: number) {
@@ -83,31 +114,75 @@ function replayStatusForEvent(event: (typeof mockGraphEvents)[number]) {
   };
 }
 
-function promptForTarget(userPrompt: string, target?: ObservedGraphNode) {
-  if (!target) {
-    return userPrompt;
-  }
+function uniqueNodesFromMentionIds(ids: string[], nodes: ObservedGraphNode[]) {
+  const seen = new Set<string>();
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const referencedNodes: ObservedGraphNode[] = [];
 
+  ids.forEach((id) => {
+    if (seen.has(id)) {
+      return;
+    }
+
+    const node = nodesById.get(id);
+
+    if (!node) {
+      return;
+    }
+
+    seen.add(id);
+    referencedNodes.push(node);
+  });
+
+  return referencedNodes;
+}
+
+function featureContext(target: ObservedGraphNode) {
   const relatedFiles =
     target.relatedFiles.length > 0
-      ? target.relatedFiles.map((file) => `- ${file}`).join("\n")
-      : "- none observed";
+      ? target.relatedFiles.map((file) => `  - ${file}`).join("\n")
+      : "  - none observed";
+  const evidence =
+    target.evidence.length > 0
+      ? target.evidence
+          .map((item) => `  - ${item.summary}${item.path ? ` (${item.path})` : ""}`)
+          .join("\n")
+      : "  - none observed";
+  const risks =
+    target.risks.length > 0
+      ? target.risks
+          .map((item) => `  - ${item.summary}${item.path ? ` (${item.path})` : ""}`)
+          .join("\n")
+      : "  - none observed";
   const status =
     target.risks.length > 0 || target.status === "risk" ? "risk" : target.status;
 
-  return `Target feature: ${target.title}
+  return `- ${target.title}
+  id: ${target.id}
+  status: ${status}
+  evidence:
+${evidence}
+  risks:
+${risks}
+  related files:
+${relatedFiles}`;
+}
 
-The user wants to modify this feature:
+function promptForReferencedFeatures(
+  userPrompt: string,
+  referencedFeatures: ObservedGraphNode[],
+) {
+  if (referencedFeatures.length === 0) {
+    return userPrompt;
+  }
+
+  return `User request:
 ${userPrompt}
 
-Relevant context:
-- status: ${status}
-- evidence count: ${target.evidence.length}
-- risk count: ${target.risks.length}
-- related files:
-${relatedFiles}
+Referenced features:
+${referencedFeatures.map(featureContext).join("\n\n")}
 
-Please focus changes on this feature unless necessary.`;
+Please focus changes on the referenced feature(s) unless necessary.`;
 }
 
 export function AppShell() {
@@ -115,7 +190,7 @@ export function AppShell() {
     graph,
     selectNode,
     clearSelectedNode,
-    applyGraphEvent,
+    applyGraphEvents,
     resetCanvas,
   } = useGraphStore([]);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -124,15 +199,15 @@ export function AppShell() {
   const [mounted, setMounted] = useState(false);
   const [repoPath, setRepoPath] = useState("");
   const [canvasMode, setCanvasMode] = useState<"real" | "demo">("real");
-  const [targetNodeId, setTargetNodeId] = useState<string>();
-  const [chatDraft, setChatDraft] = useState("");
+  const [mentionRequest, setMentionRequest] =
+    useState<FeatureMentionInsertRequest>();
   const [runStatus, setRunStatus] = useState<CodexRunStatus>("idle");
   const [runPhase, setRunPhase] = useState<string | undefined>("Ready");
   const [runMessage, setRunMessage] = useState("Choose a repo, then ask Codex what to build.");
   const [runStartedAt, setRunStartedAt] = useState<number>();
   const [elapsed, setElapsed] = useState("0s");
+  const mentionRequestIdRef = useRef(0);
   const isBusy = isReplaying || isCodexRunning || isImporting;
-  const selectedTarget = graph.nodes.find((node) => node.id === targetNodeId);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setMounted(true), 0);
@@ -171,7 +246,6 @@ export function AppShell() {
     }
 
     setCanvasMode("demo");
-    setTargetNodeId(undefined);
     clearSelectedNode();
     setIsReplaying(true);
     setRunStatus("working");
@@ -181,12 +255,20 @@ export function AppShell() {
     setElapsed("0s");
     resetCanvas();
 
-    for (const event of mockGraphEvents) {
+    for (let index = 0; index < mockGraphEvents.length; ) {
+      const { batch, nextIndex } = replayBatchAt(index);
+      const [event] = batch;
+
+      if (!event) {
+        break;
+      }
+
       await wait(replayDelayForEvent(event));
       const nextStatus = replayStatusForEvent(event);
       setRunPhase(nextStatus.phase);
       setRunMessage(nextStatus.message);
-      applyGraphEvent(event);
+      applyGraphEvents(batch);
+      index = nextIndex;
     }
 
     setIsReplaying(false);
@@ -204,7 +286,6 @@ export function AppShell() {
     const shouldClearPersistedGraph = canvasMode === "real" && Boolean(repoPath);
 
     resetCanvas();
-    setTargetNodeId(undefined);
     clearSelectedNode();
     setCanvasMode("real");
     setRunStatus("idle");
@@ -226,6 +307,7 @@ export function AppShell() {
   async function startCodexTask(
     prompt: string,
     options: CodexRunOptions,
+    referencedFeatures: ObservedGraphNode[],
     runIntent?: {
       status?: CodexRunStatus;
       phase?: string;
@@ -247,20 +329,23 @@ export function AppShell() {
       return;
     }
 
-    const finalPrompt = promptForTarget(prompt, selectedTarget);
+    const finalPrompt = promptForReferencedFeatures(prompt, referencedFeatures);
+    const referencedTitle =
+      referencedFeatures.length === 1
+        ? `@${referencedFeatures[0].title}`
+        : `${referencedFeatures.length} referenced features`;
 
     setCanvasMode("real");
     setIsCodexRunning(true);
     setRunStatus(runIntent?.status ?? "working");
     setRunPhase(runIntent?.phase ?? "Working");
     setRunMessage(
-      selectedTarget
-        ? `Codex working on @${selectedTarget.title}`
+      referencedFeatures.length > 0
+        ? `Codex working on ${referencedTitle}`
         : runIntent?.message ?? "Sending the task to Codex App Server.",
     );
     setRunStartedAt(Date.now());
     setElapsed("0s");
-    setChatDraft("");
 
     try {
       const response = await fetch("/api/codex/start", {
@@ -285,7 +370,7 @@ export function AppShell() {
         throw new Error(data.error ?? "Codex task failed.");
       }
 
-      data.graphEvents?.forEach((event) => applyGraphEvent(event));
+      applyGraphEvents(data.graphEvents ?? []);
       setRunStatus("completed");
       setRunPhase("Completed");
       setRunMessage(`${data.graphEvents?.length ?? 0} graph events applied.`);
@@ -299,16 +384,32 @@ export function AppShell() {
     }
   }
 
-  function submitCodexChat(options: CodexRunOptions) {
-    const prompt = chatDraft.trim();
+  function submitCodexChat(input: CodexComposerInput, options: CodexRunOptions) {
+    const prompt = input.text.trim();
+    const referencedFeatures = uniqueNodesFromMentionIds(input.mentionIds, graph.nodes);
 
-    void startCodexTask(prompt, options, {
+    if (!prompt) {
+      return false;
+    }
+
+    if (isBusy) {
+      return false;
+    }
+
+    if (!repoPath) {
+      setRunStatus("failed");
+      setRunPhase("No project selected");
+      setRunMessage("Choose a repository before running Codex.");
+      return false;
+    }
+
+    void startCodexTask(prompt, options, referencedFeatures, {
       status: "working",
       phase: "Working",
-      message: selectedTarget
-        ? `Codex working on @${selectedTarget.title}`
-        : "Running your request in the selected repo.",
+      message: "Running your request in the selected repo.",
     });
+
+    return true;
   }
 
   async function importExistingRepo() {
@@ -324,7 +425,6 @@ export function AppShell() {
     }
 
     setCanvasMode("real");
-    setTargetNodeId(undefined);
     clearSelectedNode();
     setIsImporting(true);
     setRunStatus("working");
@@ -352,7 +452,7 @@ export function AppShell() {
         throw new Error(data.error ?? "Repository import failed.");
       }
 
-      data.events?.forEach((event) => applyGraphEvent(event));
+      applyGraphEvents(data.events ?? []);
       setRunStatus("completed");
       setRunPhase("Import completed");
       setRunMessage(
@@ -387,7 +487,6 @@ export function AppShell() {
       setRepoPath(data.repoPath);
       resetCanvas();
       setCanvasMode("real");
-      setTargetNodeId(undefined);
       clearSelectedNode();
       setRunStatus("idle");
       setRunPhase("Ready");
@@ -419,7 +518,18 @@ export function AppShell() {
 
   function handleSelectNode(nodeId: string) {
     selectNode(nodeId);
-    setTargetNodeId(nodeId);
+    const node = graph.nodes.find((item) => item.id === nodeId);
+
+    if (!node || node.nodeType === "evidence" || node.nodeType === "risk") {
+      return;
+    }
+
+    mentionRequestIdRef.current += 1;
+    setMentionRequest({
+      id: node.id,
+      title: node.title,
+      requestId: mentionRequestIdRef.current,
+    });
   }
 
   if (!mounted) {
@@ -484,11 +594,8 @@ export function AppShell() {
           }
           chatPanel={
             <CodexChatPanel
-              draft={chatDraft}
               isRunning={isBusy}
-              selectedTarget={selectedTarget}
-              onDraftChange={setChatDraft}
-              onClearTarget={() => setTargetNodeId(undefined)}
+              mentionRequest={mentionRequest}
               onSubmit={submitCodexChat}
             />
           }

@@ -28,6 +28,10 @@ export function useGraphStore(initialEvents: GraphEvent[] = []) {
     setEvents((current) => [...current, event]);
   }, []);
 
+  const applyGraphEvents = useCallback((nextEvents: GraphEvent[]) => {
+    setEvents((current) => [...current, ...nextEvents]);
+  }, []);
+
   const replaceEvents = useCallback((nextEvents: GraphEvent[]) => {
     setEvents(nextEvents);
     setSelectedNodeId(undefined);
@@ -44,6 +48,7 @@ export function useGraphStore(initialEvents: GraphEvent[] = []) {
     selectNode,
     clearSelectedNode,
     applyGraphEvent,
+    applyGraphEvents,
     replaceEvents,
     resetCanvas,
   };

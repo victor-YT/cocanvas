@@ -9,20 +9,27 @@ import {
   type CodexModel,
   type CodexReasoningEffort,
 } from "@/lib/codex/options";
-import type { ObservedGraphNode } from "@/lib/types/observedGraph";
 
 export type CodexRunOptions = {
   model: CodexModel;
   effort: CodexReasoningEffort;
 };
 
+export type CodexComposerInput = {
+  text: string;
+  mentionIds: string[];
+};
+
+export type FeatureMentionInsertRequest = {
+  id: string;
+  title: string;
+  requestId: number;
+};
+
 type CodexChatPanelProps = {
-  draft: string;
   isRunning: boolean;
-  selectedTarget?: ObservedGraphNode;
-  onDraftChange: (value: string) => void;
-  onClearTarget: () => void;
-  onSubmit: (options: CodexRunOptions) => void;
+  mentionRequest?: FeatureMentionInsertRequest;
+  onSubmit: (input: CodexComposerInput, options: CodexRunOptions) => boolean;
 };
 
 type PickerOption<T extends string> = {
@@ -87,15 +94,6 @@ function SpinnerIcon() {
   return (
     <Icon className="h-4 w-4 animate-spin">
       <path d="M21 12a9 9 0 1 1-9-9" />
-    </Icon>
-  );
-}
-
-function XIcon() {
-  return (
-    <Icon className="h-3.5 w-3.5">
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
     </Icon>
   );
 }
@@ -187,28 +185,392 @@ function UpwardPicker<T extends string>({
   );
 }
 
-export function CodexChatPanel({
-  draft,
-  isRunning,
-  selectedTarget,
-  onDraftChange,
-  onClearTarget,
-  onSubmit,
-}: CodexChatPanelProps) {
-  const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const canSubmit = draft.trim().length > 0 && !isRunning;
+function isMentionElement(node: Node | null): node is HTMLElement {
+  return node instanceof HTMLElement && node.dataset.mentionId !== undefined;
+}
 
-  useEffect(() => {
-    const textarea = textareaRef.current;
+function createMentionElement(mention: FeatureMentionInsertRequest) {
+  const element = document.createElement("span");
+  element.className =
+    "mx-0.5 inline-flex max-w-full cursor-default select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
+  element.contentEditable = "false";
+  element.dataset.mentionId = mention.id;
+  element.dataset.mentionTitle = mention.title;
+  element.textContent = `@${mention.title}`;
 
-    if (!textarea) {
+  return element;
+}
+
+function serializeEditor(editor: HTMLElement): CodexComposerInput {
+  const pieces: string[] = [];
+  const mentionIds: string[] = [];
+
+  function visit(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      pieces.push(node.textContent ?? "");
       return;
     }
 
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 52), 146)}px`;
-  }, [draft]);
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
+
+    const element = node as HTMLElement;
+
+    if (element.dataset.mentionId !== undefined) {
+      pieces.push(
+        `@${element.dataset.mentionTitle ?? element.textContent?.replace(/^@/, "") ?? ""}`,
+      );
+      mentionIds.push(element.dataset.mentionId ?? "");
+      return;
+    }
+
+    if (element.tagName === "BR") {
+      pieces.push("\n");
+      return;
+    }
+
+    const isBlock =
+      element !== editor && (element.tagName === "DIV" || element.tagName === "P");
+
+    if (isBlock && pieces.length > 0 && !pieces.at(-1)?.endsWith("\n")) {
+      pieces.push("\n");
+    }
+
+    element.childNodes.forEach(visit);
+
+    if (isBlock && pieces.length > 0 && !pieces.at(-1)?.endsWith("\n")) {
+      pieces.push("\n");
+    }
+  }
+
+  editor.childNodes.forEach(visit);
+
+  return {
+    text: pieces.join("").replace(/\n{3,}/g, "\n\n"),
+    mentionIds: mentionIds.filter(Boolean),
+  };
+}
+
+function endRange(editor: HTMLElement) {
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+
+  return range;
+}
+
+function rangeTextBefore(editor: HTMLElement, range: Range) {
+  const beforeRange = range.cloneRange();
+  beforeRange.selectNodeContents(editor);
+  beforeRange.setEnd(range.startContainer, range.startOffset);
+
+  return beforeRange.toString();
+}
+
+function rangeTextAfter(editor: HTMLElement, range: Range) {
+  const afterRange = range.cloneRange();
+  afterRange.selectNodeContents(editor);
+  afterRange.setStart(range.startContainer, range.startOffset);
+
+  return afterRange.toString();
+}
+
+function previousSibling(node: Node | null) {
+  let current = node?.previousSibling ?? null;
+
+  while (
+    current?.nodeType === Node.TEXT_NODE &&
+    (current.textContent ?? "").length === 0
+  ) {
+    current = current.previousSibling;
+  }
+
+  return current;
+}
+
+function nextSibling(node: Node | null) {
+  let current = node?.nextSibling ?? null;
+
+  while (
+    current?.nodeType === Node.TEXT_NODE &&
+    (current.textContent ?? "").length === 0
+  ) {
+    current = current.nextSibling;
+  }
+
+  return current;
+}
+
+function setCursorBefore(node: Node) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.setStartBefore(node);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function setCursorAfter(node: Node) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.setStartAfter(node);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function setCursorAtEnd(editor: HTMLElement) {
+  const selection = window.getSelection();
+  const range = endRange(editor);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function removeMentionBeforeCaret(editor: HTMLElement) {
+  const selection = window.getSelection();
+
+  if (!selection?.rangeCount) {
+    return false;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  if (!range.collapsed || !editor.contains(range.startContainer)) {
+    return false;
+  }
+
+  const container = range.startContainer;
+  const offset = range.startOffset;
+
+  if (container.nodeType === Node.TEXT_NODE) {
+    const text = container.textContent ?? "";
+    const before = text.slice(0, offset);
+    const mention = previousSibling(container);
+
+    if (isMentionElement(mention) && /^\s*$/.test(before)) {
+      container.textContent = text.slice(offset);
+      mention.remove();
+      setCursorBefore(container);
+      return true;
+    }
+
+    return false;
+  }
+
+  if (!(container instanceof HTMLElement)) {
+    return false;
+  }
+
+  const candidate = container.childNodes.item(offset - 1);
+
+  if (isMentionElement(candidate)) {
+    const anchor = nextSibling(candidate);
+    candidate.remove();
+    if (anchor) {
+      setCursorBefore(anchor);
+    } else {
+      setCursorAtEnd(editor);
+    }
+    return true;
+  }
+
+  if (
+    candidate?.nodeType === Node.TEXT_NODE &&
+    /^\s*$/.test(candidate.textContent ?? "") &&
+    isMentionElement(previousSibling(candidate))
+  ) {
+    const mention = previousSibling(candidate);
+    const anchor = nextSibling(candidate);
+    candidate.remove();
+    mention?.remove();
+    if (anchor) {
+      setCursorBefore(anchor);
+    } else {
+      setCursorAtEnd(editor);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function removeMentionAfterCaret(editor: HTMLElement) {
+  const selection = window.getSelection();
+
+  if (!selection?.rangeCount) {
+    return false;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  if (!range.collapsed || !editor.contains(range.startContainer)) {
+    return false;
+  }
+
+  const container = range.startContainer;
+  const offset = range.startOffset;
+
+  if (container.nodeType === Node.TEXT_NODE) {
+    const text = container.textContent ?? "";
+    const after = text.slice(offset);
+    const mention = nextSibling(container);
+
+    if (isMentionElement(mention) && /^\s*$/.test(after)) {
+      container.textContent = text.slice(0, offset);
+      mention.remove();
+      setCursorAfter(container);
+      return true;
+    }
+
+    return false;
+  }
+
+  if (!(container instanceof HTMLElement)) {
+    return false;
+  }
+
+  const candidate = container.childNodes.item(offset);
+
+  if (isMentionElement(candidate)) {
+    const anchor = previousSibling(candidate);
+    candidate.remove();
+    if (anchor) {
+      setCursorAfter(anchor);
+    } else {
+      setCursorAtEnd(editor);
+    }
+    return true;
+  }
+
+  if (
+    candidate?.nodeType === Node.TEXT_NODE &&
+    /^\s*$/.test(candidate.textContent ?? "") &&
+    isMentionElement(nextSibling(candidate))
+  ) {
+    const mention = nextSibling(candidate);
+    const anchor = previousSibling(candidate);
+    candidate.remove();
+    mention?.remove();
+    if (anchor) {
+      setCursorAfter(anchor);
+    } else {
+      setCursorAtEnd(editor);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+export function CodexChatPanel({
+  isRunning,
+  mentionRequest,
+  onSubmit,
+}: CodexChatPanelProps) {
+  const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
+  const [input, setInput] = useState<CodexComposerInput>({
+    text: "",
+    mentionIds: [],
+  });
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const canSubmit = input.text.trim().length > 0 && !isRunning;
+
+  useEffect(() => {
+    function handleSelectionChange() {
+      const editor = editorRef.current;
+      const selection = window.getSelection();
+
+      if (
+        editor &&
+        selection?.rangeCount &&
+        selection.anchorNode &&
+        editor.contains(selection.anchorNode)
+      ) {
+        savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+      }
+    }
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, []);
+
+  function syncInput() {
+    const editor = editorRef.current;
+
+    if (!editor) {
+      return;
+    }
+
+    setInput(serializeEditor(editor));
+  }
+
+  function clearEditor() {
+    const editor = editorRef.current;
+
+    if (!editor) {
+      return;
+    }
+
+    editor.replaceChildren();
+    savedRangeRef.current = null;
+    setInput({
+      text: "",
+      mentionIds: [],
+    });
+  }
+
+  useEffect(() => {
+    const editor = editorRef.current;
+
+    if (!editor || !mentionRequest || isRunning) {
+      return;
+    }
+
+    editor.focus();
+
+    const selection = window.getSelection();
+    const savedRange = savedRangeRef.current;
+    const range =
+      savedRange &&
+      editor.contains(savedRange.startContainer) &&
+      editor.contains(savedRange.endContainer)
+        ? savedRange.cloneRange()
+        : endRange(editor);
+
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    range.deleteContents();
+
+    const beforeText = rangeTextBefore(editor, range);
+    const afterText = rangeTextAfter(editor, range);
+    const fragment = document.createDocumentFragment();
+
+    if (beforeText.length > 0 && !/\s$/.test(beforeText)) {
+      fragment.append(document.createTextNode(" "));
+    }
+
+    const mentionElement = createMentionElement(mentionRequest);
+    const trailingSpace = document.createTextNode(
+      afterText.length > 0 && /^\s/.test(afterText) ? "" : " ",
+    );
+
+    fragment.append(mentionElement);
+    fragment.append(trailingSpace);
+    range.insertNode(fragment);
+
+    const nextRange = document.createRange();
+    nextRange.setStartAfter(trailingSpace);
+    nextRange.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(nextRange);
+    savedRangeRef.current = nextRange.cloneRange();
+    setInput(serializeEditor(editor));
+  }, [mentionRequest, isRunning]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -217,7 +579,9 @@ export function CodexChatPanel({
       return;
     }
 
-    onSubmit(options);
+    if (onSubmit(input, options)) {
+      clearEditor();
+    }
   }
 
   return (
@@ -226,32 +590,61 @@ export function CodexChatPanel({
         onSubmit={handleSubmit}
         className="rounded-[30px] border border-black/10 bg-white/95 px-4 py-3 shadow-[0_18px_52px_rgba(24,24,27,0.13)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-300 focus-within:border-black/15 focus-within:shadow-[0_22px_60px_rgba(24,24,27,0.16)]"
       >
-        {selectedTarget ? (
-          <div className="mb-2 flex">
-            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800">
-              <span className="truncate">@{selectedTarget.title}</span>
-              <button
-                type="button"
-                aria-label="Clear target feature"
-                disabled={isRunning}
-                onClick={onClearTarget}
-                className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <XIcon />
-              </button>
-            </span>
-          </div>
-        ) : null}
+        <div className="relative">
+          {input.text.trim().length === 0 ? (
+            <div className="pointer-events-none absolute left-1 top-1 text-[15px] font-semibold leading-6 text-zinc-400">
+              Ask Codex to build or change this repo.
+            </div>
+          ) : null}
+          <div
+            ref={editorRef}
+            contentEditable={!isRunning}
+            role="textbox"
+            aria-label="Codex prompt"
+            aria-multiline="true"
+            spellCheck
+            suppressContentEditableWarning
+            onInput={syncInput}
+            onKeyUp={syncInput}
+            onMouseUp={syncInput}
+            onPaste={(event) => {
+              event.preventDefault();
+              const text = event.clipboardData.getData("text/plain");
+              const selection = window.getSelection();
 
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          disabled={isRunning}
-          onChange={(event) => onDraftChange(event.target.value)}
-          rows={1}
-          className="block max-h-[146px] min-h-[52px] w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[height,color] duration-200 ease-out placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:text-zinc-500"
-          placeholder="Ask Codex to build or change this repo."
-        />
+              if (!selection?.rangeCount) {
+                return;
+              }
+
+              const range = selection.getRangeAt(0);
+              range.deleteContents();
+              const textNode = document.createTextNode(text);
+              range.insertNode(textNode);
+              setCursorAfter(textNode);
+              syncInput();
+            }}
+            onKeyDown={(event) => {
+              const editor = editorRef.current;
+
+              if (!editor) {
+                return;
+              }
+
+              if (event.key === "Backspace" && removeMentionBeforeCaret(editor)) {
+                event.preventDefault();
+                syncInput();
+                return;
+              }
+
+              if (event.key === "Delete" && removeMentionAfterCaret(editor)) {
+                event.preventDefault();
+                syncInput();
+              }
+            }}
+            className="max-h-[146px] min-h-[52px] w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[color] duration-200 ease-out focus:outline-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-zinc-500"
+            data-disabled={isRunning}
+          />
+        </div>
 
         <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
           {/* Quick actions are hidden until they map to first-class run modes. */}
