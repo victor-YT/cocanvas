@@ -1,211 +1,189 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { MockCodexEventSource } from "@/lib/codex/MockCodexEventSource";
-import { mockGraph } from "@/lib/demo/mockGraph";
-import { mockCodexTask } from "@/lib/demo/mockPrd";
-import { useCanvasEventStream } from "@/lib/hooks/useCanvasEventStream";
+import { useEffect, useState } from "react";
+import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
 import { useGraphStore } from "@/lib/state/graphStore";
-import type { GraphState } from "@/lib/types/graph";
-import {
-  type CodexChatMessage,
-  type CodexFunctionId,
-  type CodexRunOptions,
-} from "@/components/codex/CodexChatPanel";
-import { NodeSidePanel } from "@/components/inspector/NodeSidePanel";
-import { TopBar } from "./TopBar";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
 
-const functionPrompts: Record<CodexFunctionId, string> = {
-  plan: "Plan the next feature-first implementation steps.",
-  implement: "Implement this feature end-to-end.",
-  test: "Run the relevant checks for this feature.",
-  review: "Review the feature diff and summarize evidence.",
-};
+const nodeReplayDelayMs = 1000;
+const updateReplayDelayMs = 180;
 
-const configuredLiveCanvasApiUrl =
-  process.env.NEXT_PUBLIC_LIVE_CANVAS_API_URL?.replace(/\/$/, "");
-const liveCanvasApiUrl =
-  configuredLiveCanvasApiUrl && configuredLiveCanvasApiUrl.length > 0
-    ? configuredLiveCanvasApiUrl
-    : "/api/live-canvas";
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-type AppShellProps = {
-  initialGraph?: GraphState;
-};
-
-export function AppShell({ initialGraph }: AppShellProps) {
-  const { graph, selectNode, applyEvent, replaceGraph } = useGraphStore(initialGraph);
-  const [isReplaying, setIsReplaying] = useState(false);
-  const [task, setTask] = useState(mockCodexTask);
-  const [baselineGraph] = useState<GraphState>(initialGraph ?? mockGraph);
-  const [notice, setNotice] = useState<string>();
-  const [chatDraft, setChatDraft] = useState("");
-  const [chatMessages, setChatMessages] = useState<CodexChatMessage[]>([
-    {
-      id: "codex-welcome",
-      role: "codex",
-      text: "Select a feature node, then plan, build, test, or review it with canvas context.",
-    },
-  ]);
-
-  const selectedNode = graph.features.find(
-    (node) => node.id === graph.selectedNodeId,
-  );
-  const handleGraphSnapshot = useCallback(
-    (nextGraph: GraphState) => {
-      replaceGraph(nextGraph);
-      setNotice("Live canvas graph refreshed from the backend event store.");
-    },
-    [replaceGraph],
-  );
-  const handleCodexEvent = useCallback(
-    (event: Parameters<typeof applyEvent>[0]) => {
-      applyEvent(event);
-    },
-    [applyEvent],
-  );
-  const streamHandlers = useMemo(
-    () => ({
-      initialStatus: initialGraph ? ("connected" as const) : undefined,
-      onGraphSnapshot: handleGraphSnapshot,
-      onCodexEvent: handleCodexEvent,
-    }),
-    [handleCodexEvent, handleGraphSnapshot, initialGraph],
-  );
-  const { status: streamStatus } = useCanvasEventStream(streamHandlers);
-
-  function appendChatMessage(message: Omit<CodexChatMessage, "id">) {
-    setChatMessages((current) => [
-      ...current,
-      {
-        ...message,
-        id: `chat-${Date.now()}-${current.length}`,
-      },
-    ]);
+function replayDelayForEvent(event: (typeof mockGraphEvents)[number]) {
+  if (
+    event.type === "node.upsert" ||
+    event.type === "evidence.add" ||
+    event.type === "risk.add"
+  ) {
+    return nodeReplayDelayMs;
   }
+
+  return updateReplayDelayMs;
+}
+
+function replayStatusForEvent(event: (typeof mockGraphEvents)[number]) {
+  if (event.type === "node.upsert") {
+    return {
+      phase: "Observing features",
+      message: `Added ${event.node.title}.`,
+    };
+  }
+
+  if (event.type === "edge.upsert") {
+    return {
+      phase: "Linking hierarchy",
+      message: "Connected parent and child features.",
+    };
+  }
+
+  if (event.type === "evidence.add") {
+    return {
+      phase: "Attaching evidence",
+      message: event.evidence.summary,
+    };
+  }
+
+  if (event.type === "risk.add") {
+    return {
+      phase: "Tracking risk",
+      message: event.risk.summary,
+    };
+  }
+
+  return {
+    phase: "Updating status",
+    message: event.summary ?? "Updated the feature map.",
+  };
+}
+
+export function AppShell() {
+  const {
+    graph,
+    selectNode,
+    applyGraphEvent,
+    resetCanvas,
+  } = useGraphStore([]);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [repoPath, setRepoPath] = useState("Loading repo...");
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setMounted(true), 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    async function loadCurrentRepo() {
+      const response = await fetch("/api/repo/current");
+      const data = (await response.json()) as { repoPath?: string };
+
+      if (data.repoPath) {
+        setRepoPath(data.repoPath);
+      }
+    }
+
+    void loadCurrentRepo();
+  }, []);
 
   async function runDemoReplay() {
     setIsReplaying(true);
-    setNotice(undefined);
-    replaceGraph(baselineGraph);
+    resetCanvas();
 
-    try {
-      const source = new MockCodexEventSource();
-      for await (const event of source.startTask({
-        repoPath: ".",
-        prompt: task,
-      })) {
-        applyEvent(event);
-      }
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Demo replay failed.");
-    } finally {
-      setIsReplaying(false);
+    for (const event of mockGraphEvents) {
+      await wait(replayDelayForEvent(event));
+      replayStatusForEvent(event);
+      applyGraphEvent(event);
     }
+
+    setIsReplaying(false);
   }
 
-  function describeOptions(options: CodexRunOptions) {
-    const access =
-      options.access === "ask"
-        ? "ask-before-edits"
-        : options.access === "workspace"
-          ? "workspace-write"
-          : "full-access";
-
-    return `${options.model} model, ${options.speed} speed, ${options.usage} usage, ${access}, ${options.parallel ? "parallel work" : "single work stream"}`;
+  function handleResetCanvas() {
+    resetCanvas();
   }
 
-  async function submitCodexChat(options: CodexRunOptions) {
-    const prompt = chatDraft.trim();
-
-    if (!prompt) {
-      return;
-    }
-
-    appendChatMessage({ role: "user", text: prompt });
-    setChatDraft("");
-
-    if (!selectedNode) {
-      appendChatMessage({
-        role: "codex",
-        text: `Ready to send this to the Codex SDK with the full feature map as context and ${describeOptions(options)}.`,
-      });
-      return;
-    }
-
+  async function selectRepo() {
     try {
-      const response = await fetch(
-        `${liveCanvasApiUrl}/nodes/${encodeURIComponent(selectedNode.id)}/chat`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            content: prompt,
-          }),
-        },
-      );
+      const response = await fetch("/api/repo/select", { method: "POST" });
+      const data = (await response.json()) as {
+        repoPath?: string;
+        error?: string;
+      };
 
-      if (!response.ok) {
-        throw new Error(`Live Canvas backend returned ${response.status}.`);
+      if (!response.ok || !data.repoPath) {
+        throw new Error(data.error ?? "Folder selection failed.");
       }
 
-      appendChatMessage({
-        role: "codex",
-        text: `Stored node-scoped follow-up for ${selectedNode.name} with ${describeOptions(options)}.`,
-      });
+      setRepoPath(data.repoPath);
+      resetCanvas();
     } catch (error) {
-      appendChatMessage({
-        role: "codex",
-        text:
-          error instanceof Error
-            ? `Could not store the node follow-up: ${error.message}`
-            : "Could not store the node follow-up.",
-      });
+      console.error(error);
     }
   }
 
-  function runCodexFunction(id: CodexFunctionId, options: CodexRunOptions) {
-    const target = selectedNode?.name ?? "the current feature map";
-    const prompt = `${functionPrompts[id]} Target: ${target}.`;
+  function repoLabel(path: string) {
+    const parts = path.split("/").filter(Boolean);
+    const tail = parts.slice(-2).join("/");
 
-    setTask(prompt);
-    appendChatMessage({ role: "user", text: prompt });
-    appendChatMessage({
-      role: "codex",
-      text: `Queued ${id} for ${target} with ${describeOptions(options)}. The backend SDK route can execute this with graph, selected feature, timeline, and repo context.`,
-    });
-    setNotice(`Queued Codex ${id} for ${target}.`);
+    return tail ? `/${tail}` : path;
+  }
+
+  if (!mounted) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#f7f7f4] text-zinc-950">
+        <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-sm font-medium shadow-sm">
+          Loading cocanvas...
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f4f5f2] text-zinc-950">
-      <TopBar
-        task={task}
-        isReplaying={isReplaying}
-        notice={notice}
-        onTaskChange={setTask}
-        onRunDemo={runDemoReplay}
-        featureCount={graph.features.filter((feature) => feature.status !== "drift").length}
-      />
-      <main className="min-h-0 flex-1 p-3">
-        <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <FeatureCanvas
-            graph={graph}
-            selectedNodeId={graph.selectedNodeId}
-            onSelectNode={selectNode}
-          />
-          <NodeSidePanel
-            node={selectedNode}
-            messages={chatMessages}
-            draft={chatDraft}
-            streamStatus={streamStatus}
-            timeline={graph.timeline}
-            onDraftChange={setChatDraft}
-            onSubmit={submitCodexChat}
-            onRunFunction={runCodexFunction}
-          />
-        </div>
+    <div className="min-h-screen bg-white text-zinc-950">
+      <main className="min-h-screen">
+        <FeatureCanvas
+          graph={graph}
+          selectedNodeId={graph.selectedNodeId}
+          onSelectNode={selectNode}
+          topControls={
+            <>
+              <button
+                type="button"
+                onClick={selectRepo}
+                title={repoPath}
+                className="inline-flex h-11 items-center rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold shadow-sm transition hover:bg-zinc-50"
+              >
+                <span className="font-semibold text-zinc-900">cocanvas</span>
+                <span className="ml-2 max-w-[240px] truncate font-semibold text-zinc-500">
+                  {repoLabel(repoPath)}
+                </span>
+              </button>
+            </>
+          }
+          actionControls={
+            <>
+              <button
+                type="button"
+                disabled={isReplaying}
+                onClick={runDemoReplay}
+                className="h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              >
+                {isReplaying ? "Replaying" : "Run Demo"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetCanvas}
+                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50"
+              >
+                Reset Canvas
+              </button>
+            </>
+          }
+        />
       </main>
     </div>
   );

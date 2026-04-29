@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
 
 :root {
   --background: #f6f7f9;
@@ -8,14 +9,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: Arial, Helvetica, sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
+  font-weight: 600;
 }
 
 * {
@@ -26,4 +28,161 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+button,
+[role="button"],
+.react-flow__node,
+.react-flow__controls-button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.cocanvas-flow {
+  background: #ffffff;
+}
+
+.cocanvas-flow .react-flow__pane {
+  cursor: grab;
+}
+
+.cocanvas-flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.cocanvas-flow .react-flow__edge-path {
+  transition: stroke 180ms ease, stroke-width 180ms ease;
+}
+
+.cocanvas-flow .react-flow__edge.animated path {
+  stroke-dasharray: 8;
+  animation: cocanvas-edge-flow 900ms linear infinite;
+}
+
+.cocanvas-node {
+  cursor: pointer;
+  animation: cocanvas-node-pop 460ms cubic-bezier(0.2, 1.35, 0.28, 1);
+  transform-origin: center;
+}
+
+.cocanvas-working-dot {
+  animation: cocanvas-working-pulse 1.7s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.42);
+}
+
+.cocanvas-run-status-active::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(16, 185, 129, 0.05) 32%,
+    rgba(16, 185, 129, 0.16) 48%,
+    rgba(59, 130, 246, 0.08) 58%,
+    transparent 74%
+  );
+  transform: translateX(-100%);
+  animation: cocanvas-run-status-shimmer 2.8s ease-in-out infinite;
+}
+
+.cocanvas-run-status-active::after {
+  position: absolute;
+  right: 24px;
+  bottom: 0;
+  left: 24px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(16, 185, 129, 0.36),
+    transparent
+  );
+}
+
+.cocanvas-flow-controls {
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(24, 24, 27, 0.08);
+}
+
+.cocanvas-flow-controls button {
+  border: 0;
+  border-bottom: 1px solid #e4e4e7;
+  background: rgba(255, 255, 255, 0.95);
+  color: #3f3f46;
+}
+
+.cocanvas-flow-controls button:hover {
+  background: #f4f4f5;
+}
+
+@keyframes cocanvas-node-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+
+  76% {
+    transform: scale(0.97);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes cocanvas-edge-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@keyframes cocanvas-working-pulse {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.44);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 9px rgba(52, 211, 153, 0);
+  }
+
+  100% {
+    opacity: 0.72;
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
+}
+
+@keyframes cocanvas-run-status-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  58%,
+  100% {
+    transform: translateX(100%);
+  }
 }

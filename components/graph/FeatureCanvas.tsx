@@ -1,491 +1,489 @@
 "use client";
 
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent,
-  type ReactNode,
-  type WheelEvent,
-} from "react";
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MarkerType,
+  PanOnScrollMode,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
 import type {
-  ArtifactRef,
-  FeatureNode as FeatureNodeType,
-  GraphState,
-} from "@/lib/types/graph";
-import { ArtifactNode } from "./ArtifactNode";
-import { FeatureNode } from "./FeatureNode";
-import { GraphLegend } from "./GraphLegend";
+  ObservedGraphEdge,
+  ObservedGraphNode,
+  ObservedGraphState,
+} from "@/lib/types/observedGraph";
 
 type FeatureCanvasProps = {
-  graph: GraphState;
+  graph: ObservedGraphState;
   selectedNodeId?: string;
   onSelectNode: (id: string) => void;
+  topControls?: ReactNode;
+  actionControls?: ReactNode;
+  runStatusBar?: ReactNode;
   chatPanel?: ReactNode;
 };
 
-type CanvasPoint = {
-  x: number;
-  y: number;
+type FeatureViewNode = {
+  observedNode: ObservedGraphNode;
+  status: FeatureBadgeStatus;
+  childrenCount: number;
+  evidenceCount: number;
+  riskCount: number;
 };
 
-type Viewport = CanvasPoint & {
-  zoom: number;
+type CanvasNodeData = {
+  viewNode: FeatureViewNode;
 };
 
-type PanDrag = {
-  pointerId: number;
-  start: CanvasPoint;
-  origin: CanvasPoint;
+type CanvasNode = Node<CanvasNodeData, "feature">;
+
+type FeatureBadgeStatus = "building" | "implemented" | "verified" | "risk";
+
+type HierarchyNode = {
+  node: ObservedGraphNode;
+  depth: number;
+  children: HierarchyNode[];
 };
 
-type NodeDrag = {
-  id: string;
-  pointerId: number;
-  start: CanvasPoint;
-  origin: CanvasPoint;
-  moved: boolean;
+const statusLabel: Record<FeatureBadgeStatus, string> = {
+  building: "Building",
+  implemented: "Implemented",
+  verified: "Verified",
+  risk: "Risk",
 };
 
-const BOARD_WIDTH = 1280;
-const BOARD_HEIGHT = 820;
-const FEATURE_WIDTH = 250;
+const statusBadgeTone: Record<FeatureBadgeStatus, string> = {
+  building: "bg-emerald-50 text-emerald-700",
+  implemented: "bg-blue-50 text-blue-700",
+  verified: "bg-emerald-50 text-emerald-700",
+  risk: "bg-rose-50 text-rose-700",
+};
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
+const MIN_NODE_HEIGHT = 112;
+const COLUMN_GAP = 390;
+const ROW_GAP = 34;
+const ROOT_GAP = 92;
+const CANVAS_LEFT = 120;
+const CANVAS_TOP = 170;
+
+function isVisibleFeatureNode(node: ObservedGraphNode) {
+  return node.nodeType !== "evidence" && node.nodeType !== "risk";
 }
 
-function defaultFeaturePosition(index: number): CanvasPoint {
-  return {
-    x: 120 + (index % 3) * 300,
-    y: 150 + Math.floor(index / 3) * 185,
-  };
+function displayStatus(node: ObservedGraphNode): FeatureBadgeStatus {
+  if (node.risks.length > 0 || node.status === "risk") {
+    return "risk";
+  }
+
+  if (node.status === "verified") {
+    return "verified";
+  }
+
+  if (node.status === "building") {
+    return "building";
+  }
+
+  if (node.status === "implemented") {
+    return "implemented";
+  }
+
+  return "implemented";
 }
 
-function defaultDriftPosition(index: number): CanvasPoint {
-  return {
-    x: 120 + index * 300,
-    y: 520,
-  };
+function nodeHeight(node: ObservedGraphNode) {
+  const titleLines = Math.max(1, Math.ceil(node.title.length / 28));
+
+  return MIN_NODE_HEIGHT + (titleLines - 1) * 22;
 }
 
-function buildDefaultPositions(graph: GraphState) {
-  const positions: Record<string, CanvasPoint> = {};
-  const features = graph.features.filter((feature) => feature.status !== "drift");
-  const driftNodes = graph.features.filter((feature) => feature.status === "drift");
+function containsEdges(edges: ObservedGraphEdge[], nodeIds: Set<string>) {
+  return edges.filter(
+    (edge) =>
+      edge.relation === "contains" &&
+      nodeIds.has(edge.from) &&
+      nodeIds.has(edge.to),
+  );
+}
 
-  features.forEach((feature, index) => {
-    positions[feature.id] = defaultFeaturePosition(index);
+function buildHierarchy(nodes: ObservedGraphNode[], edges: ObservedGraphEdge[]) {
+  const visibleNodes = nodes.filter(isVisibleFeatureNode);
+  const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+  const edgesByParent = new Map<string, ObservedGraphEdge[]>();
+  const childIds = new Set<string>();
+
+  containsEdges(edges, visibleNodeIds).forEach((edge) => {
+    edgesByParent.set(edge.from, [...(edgesByParent.get(edge.from) ?? []), edge]);
+    childIds.add(edge.to);
   });
-  driftNodes.forEach((feature, index) => {
-    positions[feature.id] = defaultDriftPosition(index);
-  });
 
-  return positions;
-}
+  const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
+  const roots = visibleNodes.filter((node) => !childIds.has(node.id));
 
-function artifactKindLabel(artifact: ArtifactRef) {
-  switch (artifact.kind) {
-    case "api":
-      return "Product endpoint";
-    case "service":
-      return "Feature logic";
-    case "test":
-      return "Quality check";
-    case "ui":
-      return "Customer screen";
-    default:
-      return "Supporting work";
-  }
-}
+  function visit(node: ObservedGraphNode, depth: number, path: Set<string>): HierarchyNode {
+    const childEdges = edgesByParent.get(node.id) ?? [];
+    const children = childEdges
+      .map((edge) => nodesById.get(edge.to))
+      .filter((child): child is ObservedGraphNode => Boolean(child))
+      .filter((child) => !path.has(child.id))
+      .map((child) => visit(child, depth + 1, new Set([...path, child.id])));
 
-function CanvasEdge({
-  from,
-  to,
-  tone = "stroke-zinc-300",
-}: {
-  from: CanvasPoint;
-  to: CanvasPoint;
-  tone?: string;
-}) {
-  const startX = from.x + FEATURE_WIDTH;
-  const startY = from.y + 48;
-  const endX = to.x;
-  const endY = to.y + 48;
-  const midX =
-    endX >= startX ? startX + Math.max(80, (endX - startX) / 2) : (startX + endX) / 2;
-  const d = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
-
-  return (
-    <path
-      d={d}
-      className={`${tone} fill-none`}
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  );
-}
-
-function CanvasNode({
-  id,
-  position,
-  children,
-  onDragStart,
-}: {
-  id: string;
-  position: CanvasPoint;
-  children: ReactNode;
-  onDragStart: (id: string, event: PointerEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      className="absolute w-[250px] touch-none"
-      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      onPointerDown={(event) => onDragStart(id, event)}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ArtifactStack({
-  feature,
-  artifacts,
-  position,
-}: {
-  feature?: FeatureNodeType;
-  artifacts: ArtifactRef[];
-  position: CanvasPoint;
-}) {
-  return (
-    <div
-      className="absolute w-[300px] rounded-lg border border-zinc-200 bg-white/95 p-3 shadow-sm"
-      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-zinc-900">Feature evidence</h3>
-          <p className="text-xs text-zinc-500">
-            {feature ? feature.name : "Selected feature"}
-          </p>
-        </div>
-        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
-          {artifacts.length}
-        </span>
-      </div>
-      {artifacts.length > 0 ? (
-        <div className="grid gap-2">
-          {artifacts.slice(0, 4).map((artifact) => (
-            <div key={artifact.id}>
-              <div className="mb-1 text-[11px] font-medium text-zinc-500">
-                {artifactKindLabel(artifact)}
-              </div>
-              <ArtifactNode
-                artifact={artifact}
-                active={feature?.status !== "not_started"}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
-          Evidence will attach here when this feature maps to implementation work.
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function FeatureCanvas({
-  graph,
-  selectedNodeId,
-  onSelectNode,
-  chatPanel,
-}: FeatureCanvasProps) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const suppressClickNode = useRef<string | undefined>(undefined);
-  const [viewport, setViewport] = useState<Viewport>({ x: 48, y: 92, zoom: 0.76 });
-  const [panDrag, setPanDrag] = useState<PanDrag>();
-  const [nodeDrag, setNodeDrag] = useState<NodeDrag>();
-  const [customPositions, setCustomPositions] = useState<Record<string, CanvasPoint>>({});
-
-  const scopedFeatures = graph.features.filter((feature) => feature.status !== "drift");
-  const driftNodes = graph.features.filter((feature) => feature.status === "drift");
-  const selectedFeature =
-    graph.features.find((feature) => feature.id === selectedNodeId) ??
-    scopedFeatures[0];
-  const defaultPositions = useMemo(() => buildDefaultPositions(graph), [graph]);
-  const positions = { ...defaultPositions, ...customPositions };
-  const selectedPosition = selectedFeature
-    ? positions[selectedFeature.id] ?? defaultFeaturePosition(0)
-    : undefined;
-  const artifactPosition: CanvasPoint = {
-    x: clamp((selectedPosition?.x ?? 180) - 40, 120, BOARD_WIDTH - 340),
-    y: Math.max(120, (selectedPosition?.y ?? 150) + 145),
-  };
-  function resetView() {
-    setViewport({ x: 48, y: 92, zoom: 0.76 });
-    setCustomPositions({});
-  }
-
-  function zoomTo(nextZoom: number) {
-    setViewport((current) => ({
-      ...current,
-      zoom: clamp(nextZoom, 0.45, 1.65),
-    }));
-  }
-
-  function handleWheel(event: WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const nextZoom = clamp(
-      viewport.zoom * (event.deltaY > 0 ? 0.92 : 1.08),
-      0.45,
-      1.65,
-    );
-    const cursor = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+    return {
+      node,
+      depth,
+      children,
     };
-    const world = {
-      x: (cursor.x - viewport.x) / viewport.zoom,
-      y: (cursor.y - viewport.y) / viewport.zoom,
-    };
-
-    setViewport({
-      x: cursor.x - world.x * nextZoom,
-      y: cursor.y - world.y * nextZoom,
-      zoom: nextZoom,
-    });
   }
 
-  function handlePanStart(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) {
-      return;
-    }
+  return roots.map((root) => visit(root, 0, new Set([root.id])));
+}
 
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setPanDrag({
-      pointerId: event.pointerId,
-      start: { x: event.clientX, y: event.clientY },
-      origin: { x: viewport.x, y: viewport.y },
-    });
+function subtreeHeight(tree: HierarchyNode): number {
+  const ownHeight = nodeHeight(tree.node);
+
+  if (tree.children.length === 0) {
+    return ownHeight;
   }
 
-  function handleNodeDragStart(id: string, event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) {
-      return;
-    }
+  const childHeight =
+    tree.children.reduce((height, child) => height + subtreeHeight(child), 0) +
+    Math.max(tree.children.length - 1, 0) * ROW_GAP;
 
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setNodeDrag({
-      id,
-      pointerId: event.pointerId,
-      start: { x: event.clientX, y: event.clientY },
-      origin: positions[id] ?? { x: 0, y: 0 },
-      moved: false,
-    });
-  }
+  return Math.max(ownHeight, childHeight);
+}
 
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (panDrag?.pointerId === event.pointerId) {
-      setViewport({
-        ...viewport,
-        x: panDrag.origin.x + event.clientX - panDrag.start.x,
-        y: panDrag.origin.y + event.clientY - panDrag.start.y,
+function layoutHierarchy(graph: ObservedGraphState) {
+  const roots = buildHierarchy(graph.nodes, graph.edges);
+  const positions = new Map<string, { x: number; y: number }>();
+  const childCountById = new Map<string, number>();
+  const edges: Edge[] = [];
+  let cursorY = CANVAS_TOP;
+
+  function place(tree: HierarchyNode, top: number): void {
+    const height = subtreeHeight(tree);
+    const ownHeight = nodeHeight(tree.node);
+    const x = CANVAS_LEFT + tree.depth * COLUMN_GAP;
+
+    childCountById.set(tree.node.id, tree.children.length);
+
+    if (tree.children.length === 0) {
+      positions.set(tree.node.id, {
+        x,
+        y: top,
       });
       return;
     }
 
-    if (nodeDrag?.pointerId === event.pointerId) {
-      const delta = {
-        x: (event.clientX - nodeDrag.start.x) / viewport.zoom,
-        y: (event.clientY - nodeDrag.start.y) / viewport.zoom,
-      };
-      const moved = nodeDrag.moved || Math.abs(delta.x) + Math.abs(delta.y) > 5;
+    const childrenHeight =
+      tree.children.reduce((total, child) => total + subtreeHeight(child), 0) +
+      Math.max(tree.children.length - 1, 0) * ROW_GAP;
+    let childTop = top + height / 2 - childrenHeight / 2;
 
-      setCustomPositions((current) => ({
-        ...current,
-        [nodeDrag.id]: {
-          x: clamp(nodeDrag.origin.x + delta.x, 40, BOARD_WIDTH - FEATURE_WIDTH - 40),
-          y: clamp(nodeDrag.origin.y + delta.y, 40, BOARD_HEIGHT - 130),
+    tree.children.forEach((child) => {
+      place(child, childTop);
+      childTop += subtreeHeight(child) + ROW_GAP;
+      edges.push({
+        id: `contains_${tree.node.id}_${child.node.id}`,
+        source: tree.node.id,
+        target: child.node.id,
+        type: "smoothstep",
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#c7c9cf",
+          width: 16,
+          height: 16,
         },
-      }));
-      setNodeDrag({ ...nodeDrag, moved });
-    }
+        style: { stroke: "#c7c9cf", strokeWidth: 2.2 },
+      });
+    });
+
+    positions.set(tree.node.id, {
+      x,
+      y: top + height / 2 - ownHeight / 2,
+    });
   }
 
-  function handlePointerEnd(event: PointerEvent<HTMLDivElement>) {
-    if (panDrag?.pointerId === event.pointerId) {
-      setPanDrag(undefined);
-    }
+  roots.forEach((root) => {
+    place(root, cursorY);
+    cursorY += subtreeHeight(root) + ROOT_GAP;
+  });
 
-    if (nodeDrag?.pointerId === event.pointerId) {
-      if (nodeDrag.moved) {
-        suppressClickNode.current = nodeDrag.id;
-      }
-      setNodeDrag(undefined);
-    }
-  }
+  return {
+    positions,
+    childCountById,
+    edges,
+  };
+}
 
-  function selectFeature(featureId: string) {
-    if (suppressClickNode.current === featureId) {
-      suppressClickNode.current = undefined;
-      return;
-    }
+function buildNodes(graph: ObservedGraphState): CanvasNode[] {
+  const layout = layoutHierarchy(graph);
 
-    onSelectNode(featureId);
+  return graph.nodes
+    .filter(isVisibleFeatureNode)
+    .map((node) => {
+      const viewNode: FeatureViewNode = {
+        observedNode: node,
+        status: displayStatus(node),
+        childrenCount: layout.childCountById.get(node.id) ?? 0,
+        evidenceCount: node.evidence.length,
+        riskCount: node.risks.length,
+      };
+
+      return {
+        id: node.id,
+        type: "feature",
+        data: { viewNode },
+        position: layout.positions.get(node.id) ?? { x: CANVAS_LEFT, y: CANVAS_TOP },
+        selected: graph.selectedNodeId === node.id,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+      };
+    });
+}
+
+function buildEdges(graph: ObservedGraphState): Edge[] {
+  return layoutHierarchy(graph).edges;
+}
+
+function countText(viewNode: FeatureViewNode) {
+  return `${viewNode.childrenCount} children · ${viewNode.evidenceCount} evidence · ${viewNode.riskCount} risk`;
+}
+
+function FeatureNodeCard({ data, selected }: NodeProps<CanvasNode>) {
+  const viewNode = data.viewNode;
+  const node = viewNode.observedNode;
+  const status = viewNode.status;
+
+  return (
+    <div
+      className={`group cocanvas-node relative w-[300px] cursor-pointer overflow-visible rounded-[18px] border border-zinc-200 bg-white px-5 py-4 text-left text-zinc-900 shadow-[0_12px_30px_rgba(24,24,27,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_16px_38px_rgba(24,24,27,0.12)] ${
+        selected ? "ring-2 ring-zinc-300 ring-offset-2" : ""
+      }`}
+      role="button"
+      tabIndex={0}
+      style={{ minHeight: nodeHeight(node) }}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2.5 !w-2.5 !border-0 !bg-transparent"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2.5 !w-2.5 !border-0 !bg-transparent"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute bottom-3 left-3 top-3 w-1 rounded-full bg-zinc-200"
+      />
+      {status === "building" ? (
+        <span
+          aria-label="Working"
+          className="cocanvas-working-dot absolute right-4 top-4 h-3.5 w-3.5 rounded-full bg-emerald-400"
+        />
+      ) : null}
+      <div className="pl-2 pr-4">
+        <div className="text-[17px] font-bold leading-snug tracking-normal">
+          {node.title}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusBadgeTone[status]}`}
+          >
+            {statusLabel[status]}
+          </span>
+          <span className="text-[12px] font-bold text-zinc-500">
+            {countText(viewNode)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const nodeTypes = {
+  feature: FeatureNodeCard,
+};
+
+function Inspector({ node }: { node?: ObservedGraphNode }) {
+  if (!node) {
+    return null;
   }
 
   return (
-    <section className="relative min-h-[640px] overflow-hidden rounded-xl border border-zinc-200 bg-[#f8f8f6] shadow-sm lg:min-h-[calc(100vh-124px)]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(#e4e5df_1px,transparent_1px),linear-gradient(90deg,#e4e5df_1px,transparent_1px)] bg-[size:32px_32px]" />
-
-      <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
-        <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 shadow-sm">
-          <h2 className="text-sm font-semibold text-zinc-900">Feature map</h2>
-          <p className="text-xs text-zinc-500">
-            {selectedFeature
-              ? `${selectedFeature.name} is ${selectedFeature.status.replace("_", " ")}`
-              : "Create or select a feature node"}
-          </p>
+    <aside className="pointer-events-auto absolute bottom-[236px] right-5 z-30 w-[320px] rounded-[22px] border border-zinc-200 bg-white/96 p-4 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur">
+      <div className="text-sm font-bold">{node.title}</div>
+      <div className="mt-1 text-xs font-bold text-zinc-500">
+        Status: {statusLabel[displayStatus(node)]}
+      </div>
+      {node.summary ? (
+        <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
+          {node.summary}
+        </p>
+      ) : null}
+      <div className="mt-4 grid gap-3 text-xs font-semibold text-zinc-600">
+        <div>
+          <div className="font-bold text-zinc-900">Evidence</div>
+          {node.evidence.length > 0 ? (
+            <ul className="mt-1 grid gap-1">
+              {node.evidence.map((evidence) => (
+                <li key={evidence.id}>{evidence.summary}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-zinc-400">No evidence yet.</div>
+          )}
         </div>
-        <GraphLegend />
+        <div>
+          <div className="font-bold text-zinc-900">Risks</div>
+          {node.risks.length > 0 ? (
+            <ul className="mt-1 grid gap-1">
+              {node.risks.map((risk) => (
+                <li key={risk.id}>{risk.summary}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-zinc-400">No risks observed.</div>
+          )}
+        </div>
+        {node.relatedFiles.length > 0 ? (
+          <div>
+            <div className="font-bold text-zinc-900">Related files</div>
+            <ul className="mt-1 grid gap-1">
+              {node.relatedFiles.map((file) => (
+                <li key={file} className="break-all">
+                  {file}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {node.rawEvents.length > 0 ? (
+          <div>
+            <div className="font-bold text-zinc-900">Raw events</div>
+            <div className="mt-1 text-zinc-400">
+              {node.rawEvents.length} graph events attached.
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
+function FeatureCanvasInner({
+  graph,
+  onSelectNode,
+  topControls,
+  actionControls,
+  runStatusBar,
+  chatPanel,
+}: FeatureCanvasProps) {
+  const { fitView } = useReactFlow<CanvasNode, Edge>();
+  const didFitInitialNodes = useRef(false);
+  const nodes = useMemo(() => buildNodes(graph), [graph]);
+  const edges = useMemo(() => buildEdges(graph), [graph]);
+  const selectedNode = graph.nodes.find((node) => node.id === graph.selectedNodeId);
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      didFitInitialNodes.current = false;
+      return;
+    }
+
+    if (didFitInitialNodes.current) {
+      return;
+    }
+
+    didFitInitialNodes.current = true;
+    const timeoutId = window.setTimeout(() => {
+      void fitView({ padding: 0.34, maxZoom: 0.95, duration: 420 });
+    }, 80);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [fitView, nodes.length]);
+
+  return (
+    <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
+      <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
+        {topControls}
+        <div className="hidden h-9 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 text-[11px] font-bold text-zinc-600 shadow-sm md:flex">
+          <span>Feature Map</span>
+          <div className="mx-0.5 h-4 w-px bg-zinc-200" />
+          <span>Pulsing dot = active backend work</span>
+          <div className="mx-0.5 h-4 w-px bg-zinc-200" />
+          <span>Click a node to see evidence and risks</span>
+        </div>
       </div>
 
-      <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-lg border border-zinc-200 bg-white/95 p-1 shadow-sm">
-        <button
-          type="button"
-          title="Zoom out"
-          onClick={() => zoomTo(viewport.zoom - 0.12)}
-          className="grid h-8 w-8 place-items-center rounded-md text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
-        >
-          -
-        </button>
-        <span className="min-w-12 text-center text-xs font-medium text-zinc-500">
-          {Math.round(viewport.zoom * 100)}%
-        </span>
-        <button
-          type="button"
-          title="Zoom in"
-          onClick={() => zoomTo(viewport.zoom + 0.12)}
-          className="grid h-8 w-8 place-items-center rounded-md text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          title="Reset canvas"
-          onClick={resetView}
-          className="h-8 rounded-md px-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-        >
-          Fit
-        </button>
+      <div className="absolute right-4 top-4 z-30 flex flex-wrap justify-end gap-2">
+        {actionControls}
       </div>
 
-      {chatPanel ? (
+      <Inspector node={selectedNode} />
+
+      {runStatusBar || chatPanel ? (
         <div
-          className="absolute bottom-5 left-5 right-5 z-20 flex justify-center"
-          onPointerDown={(event) => event.stopPropagation()}
+          className="pointer-events-none absolute bottom-5 left-5 right-5 z-30 flex flex-col items-center justify-center gap-2"
         >
+          {runStatusBar}
           {chatPanel}
         </div>
       ) : null}
 
-      {scopedFeatures.length === 0 ? (
-        <div className="relative z-10 h-full min-h-[640px] p-4 pt-28">
-          <div className="max-w-[280px] rounded-lg border border-dashed border-zinc-300 bg-white/90 px-3 py-2 text-left shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
-              Empty canvas
-            </p>
-            <p className="mt-1 text-sm font-medium text-zinc-900">
-              No feature nodes yet.
-            </p>
-            <p className="mt-1 text-xs leading-5 text-zinc-500">
-              Feature nodes will appear here from the live canvas backend.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div
-          ref={viewportRef}
-          className={`relative z-10 h-full min-h-[640px] touch-none overflow-hidden ${
-            panDrag ? "cursor-grabbing" : "cursor-grab"
-          }`}
-          onPointerDown={handlePanStart}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerEnd}
-          onPointerCancel={handlePointerEnd}
-          onWheel={handleWheel}
-        >
-          <div
-            className="absolute left-0 top-0"
-            style={{
-              width: BOARD_WIDTH,
-              height: BOARD_HEIGHT,
-              transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
-              transformOrigin: "0 0",
-            }}
-          >
-            <svg
-              className="pointer-events-none absolute inset-0"
-              width={BOARD_WIDTH}
-              height={BOARD_HEIGHT}
-              aria-hidden="true"
-            >
-              {selectedPosition ? (
-                <CanvasEdge
-                  from={selectedPosition}
-                  to={artifactPosition}
-                  tone="stroke-zinc-400"
-                />
-              ) : null}
-            </svg>
-
-            {scopedFeatures.map((feature) => (
-              <CanvasNode
-                key={feature.id}
-                id={feature.id}
-                position={positions[feature.id] ?? defaultFeaturePosition(0)}
-                onDragStart={handleNodeDragStart}
-              >
-                <FeatureNode
-                  id={feature.id}
-                  name={feature.name}
-                  status={feature.status}
-                  selected={selectedNodeId === feature.id}
-                  onSelect={() => selectFeature(feature.id)}
-                />
-              </CanvasNode>
-            ))}
-
-            {driftNodes.map((feature, index) => (
-              <CanvasNode
-                key={feature.id}
-                id={feature.id}
-                position={positions[feature.id] ?? defaultDriftPosition(index)}
-                onDragStart={handleNodeDragStart}
-              >
-                <FeatureNode
-                  id={feature.id}
-                  name={feature.name}
-                  status={feature.status}
-                  selected={selectedNodeId === feature.id}
-                  onSelect={() => selectFeature(feature.id)}
-                />
-              </CanvasNode>
-            ))}
-
-            <ArtifactStack
-              feature={selectedFeature}
-              artifacts={selectedFeature?.artifacts ?? []}
-              position={artifactPosition}
-            />
-          </div>
-        </div>
-      )}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodeClick={(_, node) => onSelectNode(node.id)}
+        fitView
+        fitViewOptions={{ padding: 0.34, maxZoom: 0.95 }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.82 }}
+        minZoom={0.35}
+        maxZoom={1.6}
+        panOnDrag={[0, 1, 2]}
+        panOnScroll
+        panOnScrollMode={PanOnScrollMode.Free}
+        panOnScrollSpeed={1.1}
+        zoomOnScroll={false}
+        zoomOnPinch
+        zoomOnDoubleClick={false}
+        preventScrolling
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable
+        proOptions={{ hideAttribution: true }}
+        className="cocanvas-flow absolute inset-0 h-full w-full"
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={30}
+          size={3}
+          color="#c5c7bf"
+        />
+        <Controls
+          position="bottom-left"
+          showInteractive={false}
+          className="cocanvas-flow-controls"
+        />
+      </ReactFlow>
     </section>
+  );
+}
+
+export function FeatureCanvas(props: FeatureCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <FeatureCanvasInner {...props} />
+    </ReactFlowProvider>
   );
 }

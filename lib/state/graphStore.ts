@@ -1,29 +1,46 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { mockGraph } from "@/lib/demo/mockGraph";
-import type { CodexTimelineEvent } from "@/lib/types/codex";
-import type { GraphState } from "@/lib/types/graph";
-import { updateGraphFromCodexEvent } from "@/lib/graph/updateGraphFromCodexEvent";
+import { useCallback, useMemo, useState } from "react";
+import { mockGraphEvents } from "@/lib/demo/mockGraphEvents";
+import { reduceGraphEvents } from "@/lib/graph/reduceGraphEvents";
+import type { GraphEvent } from "@/lib/types/observedGraph";
 
-export function useGraphStore(initialState: GraphState = mockGraph) {
-  const [graph, setGraph] = useState<GraphState>(initialState);
+export function useGraphStore(initialEvents: GraphEvent[] = mockGraphEvents) {
+  const [events, setEvents] = useState<GraphEvent[]>(initialEvents);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>();
 
-  const selectNode = useCallback((selectedNodeId: string) => {
-    setGraph((current) => ({ ...current, selectedNodeId }));
+  const graph = useMemo(() => {
+    const reduced = reduceGraphEvents(events);
+    return {
+      ...reduced,
+      selectedNodeId: selectedNodeId ?? reduced.selectedNodeId,
+    };
+  }, [events, selectedNodeId]);
+
+  const selectNode = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
   }, []);
 
-  const applyEvent = useCallback((event: CodexTimelineEvent) => {
-    setGraph((current) => updateGraphFromCodexEvent(current, event));
+  const applyGraphEvent = useCallback((event: GraphEvent) => {
+    setEvents((current) => [...current, event]);
   }, []);
 
-  const replaceGraph = useCallback((nextGraph: GraphState) => {
-    setGraph(structuredClone(nextGraph));
+  const replaceEvents = useCallback((nextEvents: GraphEvent[]) => {
+    setEvents(nextEvents);
+    setSelectedNodeId(undefined);
   }, []);
 
-  const resetGraph = useCallback(() => {
-    setGraph(structuredClone(initialState));
-  }, [initialState]);
+  const resetCanvas = useCallback(() => {
+    setEvents([]);
+    setSelectedNodeId(undefined);
+  }, []);
 
-  return { graph, selectNode, applyEvent, replaceGraph, resetGraph };
+  return {
+    graph,
+    events,
+    selectNode,
+    applyGraphEvent,
+    replaceEvents,
+    resetCanvas,
+  };
 }
