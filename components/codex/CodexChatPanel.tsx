@@ -192,7 +192,7 @@ function isMentionElement(node: Node | null): node is HTMLElement {
 function createMentionElement(mention: FeatureMentionInsertRequest) {
   const element = document.createElement("span");
   element.className =
-    "mx-0.5 inline-flex max-w-full cursor-default select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
+    "mx-0.5 inline-flex max-w-full cursor-pointer select-none items-center rounded-full bg-emerald-50 px-2 py-0.5 align-baseline text-[13px] font-bold leading-5 text-emerald-800 ring-1 ring-inset ring-emerald-200/80 transition hover:bg-emerald-100";
   element.contentEditable = "false";
   element.dataset.mentionId = mention.id;
   element.dataset.mentionTitle = mention.title;
@@ -325,6 +325,48 @@ function setCursorAtEnd(editor: HTMLElement) {
   const range = endRange(editor);
   selection?.removeAllRanges();
   selection?.addRange(range);
+}
+
+function clickedMentionElement(target: EventTarget | null, editor: HTMLElement) {
+  if (!(target instanceof HTMLElement)) {
+    return null;
+  }
+
+  const mention = target.closest<HTMLElement>("[data-mention-id]");
+
+  if (!mention || !editor.contains(mention)) {
+    return null;
+  }
+
+  return mention;
+}
+
+function removeMentionElement(mention: HTMLElement, editor: HTMLElement) {
+  const previous = previousSibling(mention);
+  const next = nextSibling(mention);
+
+  if (next?.nodeType === Node.TEXT_NODE) {
+    const nextText = next.textContent ?? "";
+    const previousText = previous?.textContent ?? "";
+
+    if ((!previous || /\s$/.test(previousText)) && /^\s/.test(nextText)) {
+      next.textContent = nextText.replace(/^\s/, "");
+    }
+  }
+
+  mention.remove();
+
+  if (next && editor.contains(next)) {
+    setCursorBefore(next);
+    return;
+  }
+
+  if (previous && editor.contains(previous)) {
+    setCursorAfter(previous);
+    return;
+  }
+
+  setCursorAtEnd(editor);
 }
 
 function removeMentionBeforeCaret(editor: HTMLElement) {
@@ -606,6 +648,24 @@ export function CodexChatPanel({
             suppressContentEditableWarning
             onInput={syncInput}
             onKeyUp={syncInput}
+            onMouseDown={(event) => {
+              const editor = editorRef.current;
+
+              if (!editor || isRunning) {
+                return;
+              }
+
+              const mention = clickedMentionElement(event.target, editor);
+
+              if (!mention) {
+                return;
+              }
+
+              event.preventDefault();
+              editor.focus();
+              removeMentionElement(mention, editor);
+              syncInput();
+            }}
             onMouseUp={syncInput}
             onPaste={(event) => {
               event.preventDefault();
