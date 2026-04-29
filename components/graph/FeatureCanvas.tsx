@@ -1,12 +1,17 @@
 "use client";
 
+import { useMemo, type ReactNode } from "react";
 import {
-  useMemo,
-  useState,
-  type ReactNode,
-  type PointerEvent,
-  type WheelEvent,
-} from "react";
+  Background,
+  BackgroundVariant,
+  Controls,
+  MarkerType,
+  Position,
+  ReactFlow,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
 import type {
   ObservedGraphNode,
   ObservedGraphState,
@@ -23,18 +28,11 @@ type FeatureCanvasProps = {
   chatPanel?: ReactNode;
 };
 
-type CanvasPoint = {
-  x: number;
-  y: number;
+type CanvasNodeData = {
+  observedNode: ObservedGraphNode;
 };
 
-type Viewport = CanvasPoint & {
-  zoom: number;
-};
-
-const BOARD_WIDTH = 1500;
-const BOARD_HEIGHT = 920;
-const NODE_WIDTH = 250;
+type CanvasNode = Node<CanvasNodeData, "observed">;
 
 const statusTone: Record<ObservedNodeStatus, { card: string; dot: string; label: string }> = {
   planned: {
@@ -83,64 +81,104 @@ const nodeTypeLabel: Record<ObservedNodeType, string> = {
   cluster: "Unlinked Cluster",
 };
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function defaultPosition(node: ObservedGraphNode, index: number): CanvasPoint {
+function defaultPosition(node: ObservedGraphNode, index: number) {
   if (node.nodeType === "feature") {
-    return { x: 110, y: 300 };
+    return { x: 70, y: 290 };
   }
 
   if (node.nodeType === "flow") {
-    return { x: 430, y: 95 + index * 165 };
+    return { x: 420, y: 85 + index * 180 };
   }
 
   if (node.nodeType === "capability") {
-    return { x: 430, y: 585 + index * 165 };
-  }
-
-  if (node.nodeType === "evidence") {
-    return { x: 815, y: 510 + index * 150 };
+    return { x: 420, y: 600 + index * 180 };
   }
 
   if (node.nodeType === "risk") {
-    return { x: 815, y: 175 + index * 150 };
+    return { x: 840, y: 170 + index * 165 };
   }
 
-  return { x: 1120, y: 300 + index * 155 };
+  if (node.nodeType === "evidence") {
+    return { x: 840, y: 535 + index * 165 };
+  }
+
+  return { x: 1180, y: 300 + index * 170 };
 }
 
-function buildPositions(nodes: ObservedGraphNode[]) {
+function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasNode[] {
   const typeCounts: Partial<Record<ObservedNodeType, number>> = {};
 
-  return nodes.reduce<Record<string, CanvasPoint>>((positions, node) => {
+  return graph.nodes.map((node) => {
     const index = typeCounts[node.nodeType] ?? 0;
     typeCounts[node.nodeType] = index + 1;
-    positions[node.id] = defaultPosition(node, index);
-    return positions;
-  }, {});
+
+    return {
+      id: node.id,
+      type: "observed",
+      data: { observedNode: node },
+      position: defaultPosition(node, index),
+      selected: selectedNodeId === node.id,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    };
+  });
 }
 
-function ObservedNodeCard({
-  node,
-  selected,
-  onSelect,
-}: {
-  node: ObservedGraphNode;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function edgeStyle(relation: string) {
+  if (relation === "supports") {
+    return { stroke: "#6ee7b7", strokeWidth: 2.4 };
+  }
+
+  if (relation === "blocks") {
+    return { stroke: "#fda4af", strokeWidth: 2.4 };
+  }
+
+  if (relation === "enables") {
+    return { stroke: "#93c5fd", strokeWidth: 2.2 };
+  }
+
+  return { stroke: "#d4d4d8", strokeWidth: 2 };
+}
+
+function buildEdges(graph: ObservedGraphState): Edge[] {
+  return graph.edges.map((edge) => ({
+    id: edge.id,
+    source: edge.from,
+    target: edge.to,
+    type: "smoothstep",
+    label: edge.label ?? edge.relation,
+    animated: edge.relation === "supports" || edge.relation === "blocks",
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: edgeStyle(edge.relation).stroke,
+      width: 16,
+      height: 16,
+    },
+    style: edgeStyle(edge.relation),
+    labelStyle: {
+      fill: "#71717a",
+      fontSize: 11,
+      fontWeight: 600,
+    },
+    labelBgStyle: {
+      fill: "rgba(255, 255, 255, 0.86)",
+    },
+    labelBgPadding: [8, 4],
+    labelBgBorderRadius: 8,
+  }));
+}
+
+function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
+  const node = data.observedNode;
   const tone = statusTone[node.status];
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`w-[250px] rounded-xl border px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${tone.card} ${
+    <div
+      className={`cocanvas-node w-[250px] rounded-xl border px-4 py-3 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${tone.card} ${
         selected ? "ring-2 ring-zinc-950 ring-offset-2" : ""
       }`}
+      role="button"
+      tabIndex={0}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -157,64 +195,13 @@ function ObservedNodeCard({
           {node.summary}
         </p>
       ) : null}
-    </button>
+    </div>
   );
 }
 
-function CanvasEdge({
-  from,
-  to,
-  label,
-  tone,
-}: {
-  from: CanvasPoint;
-  to: CanvasPoint;
-  label?: string;
-  tone: string;
-}) {
-  const startX = from.x + NODE_WIDTH;
-  const startY = from.y + 55;
-  const endX = to.x;
-  const endY = to.y + 55;
-  const midX = startX + Math.max(80, (endX - startX) / 2);
-  const d = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
-
-  return (
-    <g>
-      <path
-        d={d}
-        className={`${tone} fill-none`}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      {label ? (
-        <text
-          x={(startX + endX) / 2}
-          y={(startY + endY) / 2 - 8}
-          className="fill-zinc-400 text-[11px] font-medium"
-        >
-          {label}
-        </text>
-      ) : null}
-    </g>
-  );
-}
-
-function edgeTone(relation: string) {
-  if (relation === "supports") {
-    return "stroke-emerald-300";
-  }
-
-  if (relation === "blocks") {
-    return "stroke-rose-300";
-  }
-
-  if (relation === "enables") {
-    return "stroke-blue-300";
-  }
-
-  return "stroke-zinc-300";
-}
+const nodeTypes = {
+  observed: ObservedNodeCard,
+};
 
 export function FeatureCanvas({
   graph,
@@ -224,61 +211,14 @@ export function FeatureCanvas({
   actionControls,
   chatPanel,
 }: FeatureCanvasProps) {
-  const [viewport, setViewport] = useState<Viewport>({ x: 64, y: 70, zoom: 0.82 });
-  const [panStart, setPanStart] = useState<{
-    pointerId: number;
-    start: CanvasPoint;
-    origin: CanvasPoint;
-  }>();
-  const positions = useMemo(() => buildPositions(graph.nodes), [graph.nodes]);
-
-  function zoomTo(nextZoom: number) {
-    setViewport((current) => ({
-      ...current,
-      zoom: clamp(nextZoom, 0.45, 1.55),
-    }));
-  }
-
-  function handleWheel(event: WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    zoomTo(viewport.zoom * (event.deltaY > 0 ? 0.92 : 1.08));
-  }
-
-  function handlePanStart(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setPanStart({
-      pointerId: event.pointerId,
-      start: { x: event.clientX, y: event.clientY },
-      origin: { x: viewport.x, y: viewport.y },
-    });
-  }
-
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (panStart?.pointerId !== event.pointerId) {
-      return;
-    }
-
-    setViewport({
-      ...viewport,
-      x: panStart.origin.x + event.clientX - panStart.start.x,
-      y: panStart.origin.y + event.clientY - panStart.start.y,
-    });
-  }
-
-  function handlePointerEnd(event: PointerEvent<HTMLDivElement>) {
-    if (panStart?.pointerId === event.pointerId) {
-      setPanStart(undefined);
-    }
-  }
+  const nodes = useMemo(
+    () => buildNodes(graph, selectedNodeId),
+    [graph, selectedNodeId],
+  );
+  const edges = useMemo(() => buildEdges(graph), [graph]);
 
   return (
     <section className="relative min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm lg:min-h-[calc(100vh-24px)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,#d7d8d2_1px,transparent_0)] bg-[size:24px_24px]" />
-
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
         <div className="hidden items-center gap-3 rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-600 shadow-sm md:flex">
@@ -295,36 +235,6 @@ export function FeatureCanvas({
         {actionControls}
       </div>
 
-      <div className="absolute right-4 top-16 z-20 flex items-center gap-1 rounded-xl border border-zinc-200 bg-white/95 p-1 shadow-sm">
-        <button
-          type="button"
-          title="Zoom out"
-          onClick={() => zoomTo(viewport.zoom - 0.12)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
-        >
-          -
-        </button>
-        <span className="min-w-12 text-center text-xs font-medium text-zinc-500">
-          {Math.round(viewport.zoom * 100)}%
-        </span>
-        <button
-          type="button"
-          title="Zoom in"
-          onClick={() => zoomTo(viewport.zoom + 0.12)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          title="Reset view"
-          onClick={() => setViewport({ x: 64, y: 70, zoom: 0.82 })}
-          className="h-8 rounded-lg px-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-        >
-          Fit
-        </button>
-      </div>
-
       {chatPanel ? (
         <div
           className="absolute bottom-5 left-5 right-5 z-30 flex justify-center"
@@ -334,73 +244,34 @@ export function FeatureCanvas({
         </div>
       ) : null}
 
-      {graph.nodes.length > 0 ? (
-        <div
-          className={`relative z-10 h-full min-h-[calc(100vh-24px)] touch-none overflow-hidden ${
-            panStart ? "cursor-grabbing" : "cursor-grab"
-          }`}
-          onPointerDown={handlePanStart}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerEnd}
-          onPointerCancel={handlePointerEnd}
-          onWheel={handleWheel}
-        >
-          <div
-            className="absolute left-0 top-0"
-            style={{
-              width: BOARD_WIDTH,
-              height: BOARD_HEIGHT,
-              transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
-              transformOrigin: "0 0",
-            }}
-          >
-            <svg
-              className="pointer-events-none absolute inset-0"
-              width={BOARD_WIDTH}
-              height={BOARD_HEIGHT}
-              aria-hidden="true"
-            >
-              {graph.edges.map((edge) => {
-                const from = positions[edge.from];
-                const to = positions[edge.to];
-
-                if (!from || !to) {
-                  return null;
-                }
-
-                return (
-                  <CanvasEdge
-                    key={edge.id}
-                    from={from}
-                    to={to}
-                    label={edge.label ?? edge.relation}
-                    tone={edgeTone(edge.relation)}
-                  />
-                );
-              })}
-            </svg>
-
-            {graph.nodes.map((node) => (
-              <div
-                key={node.id}
-                className="absolute w-[250px]"
-                style={{
-                  transform: `translate(${positions[node.id]?.x ?? 0}px, ${
-                    positions[node.id]?.y ?? 0
-                  }px)`,
-                }}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                <ObservedNodeCard
-                  node={node}
-                  selected={selectedNodeId === node.id}
-                  onSelect={() => onSelectNode(node.id)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodeClick={(_, node) => onSelectNode(node.id)}
+        fitView
+        fitViewOptions={{ padding: 0.28, maxZoom: 1.08 }}
+        defaultViewport={{ x: 80, y: 80, zoom: 0.82 }}
+        minZoom={0.35}
+        maxZoom={1.6}
+        nodesDraggable
+        nodesConnectable={false}
+        elementsSelectable
+        proOptions={{ hideAttribution: true }}
+        className="cocanvas-flow"
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1.4}
+          color="#d7d8d2"
+        />
+        <Controls
+          position="bottom-left"
+          showInteractive={false}
+          className="cocanvas-flow-controls"
+        />
+      </ReactFlow>
     </section>
   );
 }

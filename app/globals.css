@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
 
 :root {
   --background: #f6f7f9;
@@ -26,4 +27,87 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+button,
+[role="button"],
+.react-flow__node,
+.react-flow__controls-button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.cocanvas-flow {
+  background: #ffffff;
+}
+
+.cocanvas-flow .react-flow__pane {
+  cursor: grab;
+}
+
+.cocanvas-flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.cocanvas-flow .react-flow__edge-path {
+  transition: stroke 180ms ease, stroke-width 180ms ease;
+}
+
+.cocanvas-flow .react-flow__edge.animated path {
+  stroke-dasharray: 8;
+  animation: cocanvas-edge-flow 900ms linear infinite;
+}
+
+.cocanvas-node {
+  cursor: pointer;
+  animation: cocanvas-node-pop 460ms cubic-bezier(0.2, 1.35, 0.28, 1);
+  transform-origin: center;
+}
+
+.cocanvas-flow-controls {
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(24, 24, 27, 0.08);
+}
+
+.cocanvas-flow-controls button {
+  border: 0;
+  border-bottom: 1px solid #e4e4e7;
+  background: rgba(255, 255, 255, 0.95);
+  color: #3f3f46;
+}
+
+.cocanvas-flow-controls button:hover {
+  background: #f4f4f5;
+}
+
+@keyframes cocanvas-node-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+
+  76% {
+    transform: scale(0.97);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes cocanvas-edge-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
 }
