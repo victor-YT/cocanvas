@@ -6,7 +6,6 @@ import { mockGraph } from "@/lib/demo/mockGraph";
 import { mockCodexTask } from "@/lib/demo/mockPrd";
 import { useGraphStore } from "@/lib/state/graphStore";
 import type { GraphState } from "@/lib/types/graph";
-import { BottomInspector } from "./BottomInspector";
 import { RightTimeline } from "./RightTimeline";
 import { TopBar } from "./TopBar";
 import { FeatureCanvas } from "@/components/graph/FeatureCanvas";
@@ -48,7 +47,7 @@ export function AppShell() {
         onTaskChange={setTask}
         onRunDemo={runDemoReplay}
       />
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 lg:grid-cols-[1fr_360px]">
+      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 lg:grid-cols-[1fr_320px]">
         <FeatureCanvas
           graph={graph}
           selectedNodeId={graph.selectedNodeId}
@@ -56,7 +55,6 @@ export function AppShell() {
         />
         <RightTimeline events={graph.timeline} isReplaying={isReplaying} />
       </main>
-      <BottomInspector graph={graph} selectedNodeId={graph.selectedNodeId} />
     </div>
   );
 }
