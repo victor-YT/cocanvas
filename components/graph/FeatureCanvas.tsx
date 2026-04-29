@@ -78,9 +78,19 @@ const nodeTypeLabel: Record<ObservedNodeType, string> = {
   cluster: "Unlinked Cluster",
 };
 
-const layerGapX = 390;
-const nodeGapY = 195;
+const layerX: Record<ObservedNodeType, number> = {
+  feature: 100,
+  flow: 430,
+  capability: 760,
+  evidence: 1090,
+  risk: 1090,
+  cluster: 1220,
+};
+
+const nodeGapY = 210;
+const childGapY = 165;
 const canvasCenterY = 340;
+const minCanvasY = 120;
 
 function visualEdge(edge: ObservedGraphEdge) {
   if (edge.relation === "supports" || edge.relation === "blocks") {
@@ -96,106 +106,158 @@ function visualEdge(edge: ObservedGraphEdge) {
   };
 }
 
-function nodeSortWeight(node: ObservedGraphNode) {
-  const weights: Record<ObservedNodeType, number> = {
-    feature: 0,
-    flow: 1,
-    capability: 2,
-    evidence: 3,
-    risk: 4,
-    cluster: 5,
-  };
-
-  return weights[node.nodeType];
-}
-
-function buildNodePositions(graph: ObservedGraphState) {
-  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const nodeOrder = new Map(graph.nodes.map((node, index) => [node.id, index]));
-  const usableEdges = graph.edges
-    .map(visualEdge)
-    .filter((edge) => nodesById.has(edge.from) && nodesById.has(edge.to));
-
-  const incomingCount = new Map(graph.nodes.map((node) => [node.id, 0]));
-  const parentIds = new Map<string, string[]>();
-
-  usableEdges.forEach((edge) => {
-    incomingCount.set(edge.to, (incomingCount.get(edge.to) ?? 0) + 1);
-    parentIds.set(edge.to, [...(parentIds.get(edge.to) ?? []), edge.from]);
-  });
-
-  const depthById = new Map(graph.nodes.map((node) => [node.id, 0]));
-
-  for (let pass = 0; pass < graph.nodes.length; pass += 1) {
-    usableEdges.forEach((edge) => {
-      const nextDepth = (depthById.get(edge.from) ?? 0) + 1;
-      if (nextDepth > (depthById.get(edge.to) ?? 0)) {
-        depthById.set(edge.to, nextDepth);
-      }
-    });
+function stableSiblingOffset(index: number, gap: number) {
+  if (index === 0) {
+    return 0;
   }
 
-  const maxLinkedDepth = Math.max(
-    0,
-    ...usableEdges.flatMap((edge) => [
-      depthById.get(edge.from) ?? 0,
-      depthById.get(edge.to) ?? 0,
-    ]),
-  );
+  const distance = Math.ceil(index / 2) * gap;
+  return index % 2 === 1 ? distance : -distance;
+}
 
-  graph.nodes.forEach((node) => {
-    const isIsolated = !usableEdges.some(
-      (edge) => edge.from === node.id || edge.to === node.id,
+function parentMapForGraph(graph: ObservedGraphState) {
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const parentsById = new Map<string, string[]>();
+
+  graph.edges.map(visualEdge).forEach((edge) => {
+    if (!nodesById.has(edge.from) || !nodesById.has(edge.to)) {
+      return;
+    }
+
+    parentsById.set(edge.to, [...(parentsById.get(edge.to) ?? []), edge.from]);
+  });
+
+  return parentsById;
+}
+
+function preferredParentId(
+  node: ObservedGraphNode,
+  parentsById: Map<string, string[]>,
+  nodesById: Map<string, ObservedGraphNode>,
+) {
+  const parents = parentsById.get(node.id) ?? [];
+
+  if (parents.length === 0) {
+    return undefined;
+  }
+
+  if (node.nodeType === "evidence" || node.nodeType === "risk") {
+    return parents.find((parentId) => nodesById.has(parentId)) ?? parents[0];
+  }
+
+  if (node.nodeType === "flow") {
+    return (
+      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "feature") ??
+      parents[0]
     );
+  }
 
-    if (isIsolated && node.nodeType === "cluster") {
-      depthById.set(node.id, maxLinkedDepth + 1);
+  if (node.nodeType === "capability") {
+    return (
+      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "flow") ??
+      parents.find((parentId) => nodesById.get(parentId)?.nodeType === "feature") ??
+      parents[0]
+    );
+  }
+
+  return parents[0];
+}
+
+function siblingGroupKey(node: ObservedGraphNode, parentId?: string) {
+  if (node.nodeType === "evidence" || node.nodeType === "risk") {
+    return `detail:${parentId ?? "root"}`;
+  }
+
+  return `${node.nodeType}:${parentId ?? "root"}`;
+}
+
+function resolveLayerCollisions(
+  nodes: ObservedGraphNode[],
+  positionById: Map<string, { x: number; y: number }>,
+) {
+  const nodesByLayer = new Map<number, ObservedGraphNode[]>();
+
+  nodes.forEach((node) => {
+    const x = positionById.get(node.id)?.x ?? layerX[node.nodeType];
+    nodesByLayer.set(x, [...(nodesByLayer.get(x) ?? []), node]);
+  });
+
+  nodesByLayer.forEach((layerNodes) => {
+    let nextY = minCanvasY;
+
+    [...layerNodes]
+      .sort((nodeA, nodeB) => {
+        const positionA = positionById.get(nodeA.id);
+        const positionB = positionById.get(nodeB.id);
+
+        if ((positionA?.y ?? 0) !== (positionB?.y ?? 0)) {
+          return (positionA?.y ?? 0) - (positionB?.y ?? 0);
+        }
+
+        return nodes.indexOf(nodeA) - nodes.indexOf(nodeB);
+      })
+      .forEach((node) => {
+        const current = positionById.get(node.id) ?? {
+          x: layerX[node.nodeType],
+          y: canvasCenterY,
+        };
+        const y = Math.max(current.y, nextY);
+
+        positionById.set(node.id, {
+          ...current,
+          y,
+        });
+        nextY = y + nodeGapY;
+      });
+  });
+}
+
+function layoutGraph(graph: ObservedGraphState) {
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const parentsById = parentMapForGraph(graph);
+  const siblingIndexByParent = new Map<string, number>();
+  const positionById = new Map<string, { x: number; y: number }>();
+
+  graph.nodes.forEach((node, index) => {
+    if (node.nodeType === "feature") {
+      positionById.set(node.id, {
+        x: layerX.feature,
+        y: canvasCenterY + stableSiblingOffset(index, nodeGapY),
+      });
     }
   });
 
-  const layers = new Map<number, ObservedGraphNode[]>();
   graph.nodes.forEach((node) => {
-    const depth = depthById.get(node.id) ?? 0;
-    layers.set(depth, [...(layers.get(depth) ?? []), node]);
+    if (positionById.has(node.id)) {
+      return;
+    }
+
+    const parentId = preferredParentId(node, parentsById, nodesById);
+    const parent = parentId ? positionById.get(parentId) : undefined;
+    const parentKey = siblingGroupKey(node, parentId);
+    const siblingIndex = siblingIndexByParent.get(parentKey) ?? 0;
+    siblingIndexByParent.set(parentKey, siblingIndex + 1);
+
+    positionById.set(node.id, {
+      x: layerX[node.nodeType],
+      y:
+        (parent?.y ?? canvasCenterY) +
+        stableSiblingOffset(
+          siblingIndex,
+          node.nodeType === "evidence" || node.nodeType === "risk"
+            ? childGapY
+            : nodeGapY,
+        ),
+    });
   });
 
-  const positionById = new Map<string, { x: number; y: number }>();
-
-  [...layers.entries()]
-    .sort(([depthA], [depthB]) => depthA - depthB)
-    .forEach(([depth, layerNodes]) => {
-      const orderedNodes = [...layerNodes].sort((nodeA, nodeB) => {
-        const parentA = parentIds.get(nodeA.id)?.[0];
-        const parentB = parentIds.get(nodeB.id)?.[0];
-        const parentYA = parentA ? positionById.get(parentA)?.y : undefined;
-        const parentYB = parentB ? positionById.get(parentB)?.y : undefined;
-
-        if (parentYA !== undefined && parentYB !== undefined && parentYA !== parentYB) {
-          return parentYA - parentYB;
-        }
-
-        if (nodeSortWeight(nodeA) !== nodeSortWeight(nodeB)) {
-          return nodeSortWeight(nodeA) - nodeSortWeight(nodeB);
-        }
-
-        return (nodeOrder.get(nodeA.id) ?? 0) - (nodeOrder.get(nodeB.id) ?? 0);
-      });
-
-      const layerTop = canvasCenterY - ((orderedNodes.length - 1) * nodeGapY) / 2;
-
-      orderedNodes.forEach((node, index) => {
-        positionById.set(node.id, {
-          x: depth * layerGapX,
-          y: layerTop + index * nodeGapY,
-        });
-      });
-    });
+  resolveLayerCollisions(graph.nodes, positionById);
 
   return positionById;
 }
 
 function buildNodes(graph: ObservedGraphState, selectedNodeId?: string): CanvasNode[] {
-  const positionById = buildNodePositions(graph);
+  const positionById = layoutGraph(graph);
 
   return graph.nodes.map((node) => {
     return {
