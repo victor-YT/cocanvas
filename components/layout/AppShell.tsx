@@ -223,6 +223,7 @@ export function AppShell() {
     selectNode,
     clearSelectedNode,
     applyGraphEvents,
+    removeNode,
     replaceEvents,
     resetCanvas,
   } = useGraphStore([]);
@@ -660,6 +661,24 @@ export function AppShell() {
     setRunMessage(`Ask Codex about @${node.title}.`);
   }
 
+  function handleMentionRemoved(mentionId: string) {
+    const node = graph.nodes.find((item) => item.id === mentionId);
+
+    if (!node || node.relatedFiles.length > 0) {
+      return;
+    }
+
+    removeNode(mentionId);
+    setMissingRelatedFilesByNodeId((current) => {
+      const next = { ...current };
+      delete next[mentionId];
+      return next;
+    });
+    setRunStatus("idle");
+    setRunPhase("Canvas updated");
+    setRunMessage(`Removed ${node.title} because it had no related files.`);
+  }
+
   if (!mounted) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#f7f7f4] text-zinc-950">
@@ -733,6 +752,7 @@ export function AppShell() {
               isRunning={isBusy}
               insertMentionRequest={mentionInsertRequest}
               mentionOptions={mentionOptions}
+              onMentionRemoved={handleMentionRemoved}
               onSubmit={submitCodexChat}
             />
           }

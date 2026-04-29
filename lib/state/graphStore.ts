@@ -45,6 +45,31 @@ export function useGraphStore(initialEvents: GraphEvent[] = []) {
     setSelectedNodeId(undefined);
   }, []);
 
+  const removeNode = useCallback((nodeId: string) => {
+    setEvents((current) =>
+      current.filter((event) => {
+        if (event.type === "node.upsert") {
+          return event.node.id !== nodeId;
+        }
+
+        if (event.type === "edge.upsert") {
+          return event.edge.from !== nodeId && event.edge.to !== nodeId;
+        }
+
+        if (
+          event.type === "status.update" ||
+          event.type === "evidence.add" ||
+          event.type === "risk.add"
+        ) {
+          return event.targetId !== nodeId;
+        }
+
+        return true;
+      }),
+    );
+    setSelectedNodeId((current) => (current === nodeId ? null : current));
+  }, []);
+
   return {
     graph,
     events,
@@ -52,6 +77,7 @@ export function useGraphStore(initialEvents: GraphEvent[] = []) {
     clearSelectedNode,
     applyGraphEvent,
     applyGraphEvents,
+    removeNode,
     replaceEvents,
     resetCanvas,
   };

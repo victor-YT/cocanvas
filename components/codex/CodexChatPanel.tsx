@@ -40,6 +40,7 @@ type CodexChatPanelProps = {
   isRunning: boolean;
   insertMentionRequest?: FeatureMentionInsertRequest;
   mentionOptions: FeatureMentionOption[];
+  onMentionRemoved?: (mentionId: string) => void;
   onSubmit: (input: CodexComposerInput, options: CodexRunOptions) => boolean;
 };
 
@@ -390,6 +391,7 @@ function clickedMentionElement(target: EventTarget | null, editor: HTMLElement) 
 }
 
 function removeMentionElement(mention: HTMLElement, editor: HTMLElement) {
+  const mentionId = mention.dataset.mentionId;
   const previous = previousSibling(mention);
   const next = nextSibling(mention);
 
@@ -406,28 +408,29 @@ function removeMentionElement(mention: HTMLElement, editor: HTMLElement) {
 
   if (next && editor.contains(next)) {
     setCursorBefore(next);
-    return;
+    return mentionId;
   }
 
   if (previous && editor.contains(previous)) {
     setCursorAfter(previous);
-    return;
+    return mentionId;
   }
 
   setCursorAtEnd(editor);
+  return mentionId;
 }
 
 function removeMentionBeforeCaret(editor: HTMLElement) {
   const selection = window.getSelection();
 
   if (!selection?.rangeCount) {
-    return false;
+    return undefined;
   }
 
   const range = selection.getRangeAt(0);
 
   if (!range.collapsed || !editor.contains(range.startContainer)) {
-    return false;
+    return undefined;
   }
 
   const container = range.startContainer;
@@ -439,22 +442,24 @@ function removeMentionBeforeCaret(editor: HTMLElement) {
     const mention = previousSibling(container);
 
     if (isMentionElement(mention) && /^\s*$/.test(before)) {
+      const mentionId = mention.dataset.mentionId;
       container.textContent = text.slice(offset);
       mention.remove();
       setCursorBefore(container);
-      return true;
+      return mentionId;
     }
 
-    return false;
+    return undefined;
   }
 
   if (!(container instanceof HTMLElement)) {
-    return false;
+    return undefined;
   }
 
   const candidate = container.childNodes.item(offset - 1);
 
   if (isMentionElement(candidate)) {
+    const mentionId = candidate.dataset.mentionId;
     const anchor = nextSibling(candidate);
     candidate.remove();
     if (anchor) {
@@ -462,7 +467,7 @@ function removeMentionBeforeCaret(editor: HTMLElement) {
     } else {
       setCursorAtEnd(editor);
     }
-    return true;
+    return mentionId;
   }
 
   if (
@@ -471,6 +476,7 @@ function removeMentionBeforeCaret(editor: HTMLElement) {
     isMentionElement(previousSibling(candidate))
   ) {
     const mention = previousSibling(candidate);
+    const mentionId = isMentionElement(mention) ? mention.dataset.mentionId : undefined;
     const anchor = nextSibling(candidate);
     candidate.remove();
     mention?.remove();
@@ -479,23 +485,23 @@ function removeMentionBeforeCaret(editor: HTMLElement) {
     } else {
       setCursorAtEnd(editor);
     }
-    return true;
+    return mentionId;
   }
 
-  return false;
+  return undefined;
 }
 
 function removeMentionAfterCaret(editor: HTMLElement) {
   const selection = window.getSelection();
 
   if (!selection?.rangeCount) {
-    return false;
+    return undefined;
   }
 
   const range = selection.getRangeAt(0);
 
   if (!range.collapsed || !editor.contains(range.startContainer)) {
-    return false;
+    return undefined;
   }
 
   const container = range.startContainer;
@@ -507,22 +513,24 @@ function removeMentionAfterCaret(editor: HTMLElement) {
     const mention = nextSibling(container);
 
     if (isMentionElement(mention) && /^\s*$/.test(after)) {
+      const mentionId = mention.dataset.mentionId;
       container.textContent = text.slice(0, offset);
       mention.remove();
       setCursorAfter(container);
-      return true;
+      return mentionId;
     }
 
-    return false;
+    return undefined;
   }
 
   if (!(container instanceof HTMLElement)) {
-    return false;
+    return undefined;
   }
 
   const candidate = container.childNodes.item(offset);
 
   if (isMentionElement(candidate)) {
+    const mentionId = candidate.dataset.mentionId;
     const anchor = previousSibling(candidate);
     candidate.remove();
     if (anchor) {
@@ -530,7 +538,7 @@ function removeMentionAfterCaret(editor: HTMLElement) {
     } else {
       setCursorAtEnd(editor);
     }
-    return true;
+    return mentionId;
   }
 
   if (
@@ -539,6 +547,7 @@ function removeMentionAfterCaret(editor: HTMLElement) {
     isMentionElement(nextSibling(candidate))
   ) {
     const mention = nextSibling(candidate);
+    const mentionId = isMentionElement(mention) ? mention.dataset.mentionId : undefined;
     const anchor = previousSibling(candidate);
     candidate.remove();
     mention?.remove();
@@ -547,10 +556,10 @@ function removeMentionAfterCaret(editor: HTMLElement) {
     } else {
       setCursorAtEnd(editor);
     }
-    return true;
+    return mentionId;
   }
 
-  return false;
+  return undefined;
 }
 
 function detectMentionTrigger(editor: HTMLElement): Omit<MentionTrigger, "activeIndex"> | null {
@@ -605,6 +614,7 @@ export function CodexChatPanel({
   isRunning,
   insertMentionRequest,
   mentionOptions,
+  onMentionRemoved,
   onSubmit,
 }: CodexChatPanelProps) {
   const [options, setOptions] = useState<CodexRunOptions>(defaultOptions);
@@ -882,7 +892,10 @@ export function CodexChatPanel({
 
               event.preventDefault();
               editor.focus();
-              removeMentionElement(mention, editor);
+              const removedMentionId = removeMentionElement(mention, editor);
+              if (removedMentionId) {
+                onMentionRemoved?.(removedMentionId);
+              }
               syncInput();
             }}
             onMouseUp={syncInput}
@@ -972,15 +985,25 @@ export function CodexChatPanel({
                 }
               }
 
-              if (event.key === "Backspace" && removeMentionBeforeCaret(editor)) {
-                event.preventDefault();
-                syncInput();
-                return;
+              if (event.key === "Backspace") {
+                const removedMentionId = removeMentionBeforeCaret(editor);
+
+                if (removedMentionId) {
+                  event.preventDefault();
+                  onMentionRemoved?.(removedMentionId);
+                  syncInput();
+                  return;
+                }
               }
 
-              if (event.key === "Delete" && removeMentionAfterCaret(editor)) {
-                event.preventDefault();
-                syncInput();
+              if (event.key === "Delete") {
+                const removedMentionId = removeMentionAfterCaret(editor);
+
+                if (removedMentionId) {
+                  event.preventDefault();
+                  onMentionRemoved?.(removedMentionId);
+                  syncInput();
+                }
               }
             }}
             className="w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-1 py-1 text-[15px] font-semibold leading-6 text-zinc-900 outline-none transition-[height,color] duration-200 ease-out focus:outline-none data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-zinc-500"
