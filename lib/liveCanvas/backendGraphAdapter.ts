@@ -1,5 +1,6 @@
 import type { ArtifactKind, FeatureStatus, GraphState } from "@/lib/types/graph";
 import type { CodexTimelineEvent } from "@/lib/types/codex";
+import type { GraphEvent, ObservedNodeStatus } from "@/lib/types/observedGraph";
 
 type BackendFeatureStatus =
   | "idle"
@@ -57,6 +58,8 @@ export type BackendGraphSnapshot = {
   conflicts: BackendCanvasEvent[];
 };
 
+export type BackendNodeFilter = (node: BackendFeatureNode) => boolean;
+
 export function isBackendCanvasEvent(payload: unknown): payload is BackendCanvasEvent {
   return (
     typeof payload === "object" &&
@@ -81,6 +84,25 @@ function mapBackendStatus(status: BackendFeatureStatus, riskLevel: BackendRiskLe
   }
 
   return "not_started";
+}
+
+function mapBackendObservedStatus(
+  status: BackendFeatureStatus,
+  riskLevel: BackendRiskLevel,
+): ObservedNodeStatus {
+  if (riskLevel === "high" || status === "blocked" || status === "failed") {
+    return "risk";
+  }
+
+  if (status === "done") {
+    return "verified";
+  }
+
+  if (status === "planning" || status === "editing" || status === "testing") {
+    return "building";
+  }
+
+  return "planned";
 }
 
 function artifactKindForPath(path: string): ArtifactKind {
@@ -126,6 +148,13 @@ function backendEventTitle(event: BackendCanvasEvent) {
   }
 }
 
+function eventSafeId(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 export function backendEventToTimeline(event: BackendCanvasEvent): CodexTimelineEvent {
   const isTestFailure = event.type === "test.updated" && event.testStatus === "failed";
   const isTestPass = event.type === "test.updated" && event.testStatus === "passed";
@@ -156,6 +185,111 @@ export function backendEventToTimeline(event: BackendCanvasEvent): CodexTimeline
       event.type === "test.updated" ? (event.testStatus === "failed" ? 1 : 0) : undefined,
     raw: event,
   };
+}
+
+export function backendSnapshotToGraphEvents(
+  snapshot: BackendGraphSnapshot,
+  filterNode: BackendNodeFilter = () => true,
+): GraphEvent[] {
+  const events: GraphEvent[] = [];
+
+  const includedNodeIds = new Set<string>();
+
+  snapshot.nodes.filter(filterNode).forEach((node) => {
+    includedNodeIds.add(node.id);
+    events.push({
+      type: "node.upsert",
+      node: {
+        id: node.id,
+        nodeType: "feature",
+        title: node.title,
+        status: mapBackendObservedStatus(node.status, node.riskLevel),
+        summary: node.summary ?? node.description ?? node.originalPrompt,
+        confidence: 0.9,
+        relatedFiles: node.changedFiles,
+      },
+    });
+
+    events.push({
+      type: "evidence.add",
+      targetId: node.id,
+      evidence: {
+        id: `${node.id}_prompt`,
+        kind: "plan",
+        summary: node.originalPrompt,
+      },
+    });
+
+    node.changedFiles.forEach((file) => {
+      events.push({
+        type: "evidence.add",
+        targetId: node.id,
+        evidence: {
+          id: `${node.id}_${eventSafeId(file)}_file`,
+          kind: "file",
+          summary: `Changed ${file}`,
+          path: file,
+        },
+      });
+    });
+
+    if (node.diffSummary) {
+      events.push({
+        type: "evidence.add",
+        targetId: node.id,
+        evidence: {
+          id: `${node.id}_diff`,
+          kind: "diff",
+          summary: node.diffSummary,
+        },
+      });
+    }
+
+    if (node.testCommand) {
+      events.push({
+        type: "evidence.add",
+        targetId: node.id,
+        evidence: {
+          id: `${node.id}_test_${eventSafeId(node.testCommand)}`,
+          kind: "test",
+          summary: node.testOutputSummary ?? `${node.testCommand}: ${node.testStatus}`,
+        },
+      });
+    }
+
+    node.riskReasons.forEach((reason, index) => {
+      events.push({
+        type: "risk.add",
+        targetId: node.id,
+        risk: {
+          id: `${node.id}_risk_${index}`,
+          severity: node.riskLevel,
+          summary: reason,
+        },
+      });
+    });
+  });
+
+  snapshot.conflicts.forEach((conflict) => {
+    const [from, to] = conflict.nodeIds ?? [];
+
+    if (!from || !to || !includedNodeIds.has(from) || !includedNodeIds.has(to)) {
+      return;
+    }
+
+    events.push({
+      type: "edge.upsert",
+      edge: {
+        id: conflict.id,
+        from,
+        to,
+        relation: "contains",
+        label: conflict.reason ?? "conflict",
+      },
+    });
+  });
+
+  return events;
 }
 
 export function backendSnapshotToGraph(snapshot: BackendGraphSnapshot): GraphState {

@@ -69,7 +69,13 @@ async function walkRepo(root: string, dir = root, files: string[] = []) {
     return files;
   }
 
-  const entries = await readdir(dir, { withFileTypes: true });
+  let entries;
+
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return files;
+  }
 
   for (const entry of entries) {
     if (files.length >= MAX_FILES) {
@@ -94,19 +100,16 @@ async function walkRepo(root: string, dir = root, files: string[] = []) {
 
 export async function scanRepo(repoPath: string): Promise<ArtifactRef[]> {
   const workspaceRoot = process.cwd();
-  const requestedRoot = resolve(
+  const root = resolve(
     /* turbopackIgnore: true */ workspaceRoot,
-    repoPath || ".",
+    repoPath.trim() || ".",
   );
-  const root = requestedRoot.startsWith(workspaceRoot)
-    ? requestedRoot
-    : workspaceRoot;
 
   try {
     const rootStat = await stat(root);
 
     if (!rootStat.isDirectory()) {
-      return mockRepoScan();
+      return [];
     }
 
     const files = await walkRepo(root);
@@ -124,6 +127,6 @@ export async function scanRepo(repoPath: string): Promise<ArtifactRef[]> {
       };
     });
   } catch {
-    return mockRepoScan();
+    return repoPath.trim() && repoPath.trim() !== "." ? [] : mockRepoScan();
   }
 }

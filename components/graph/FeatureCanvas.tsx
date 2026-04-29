@@ -68,6 +68,33 @@ const statusBadgeTone: Record<FeatureBadgeStatus, string> = {
   risk: "bg-rose-50 text-rose-700",
 };
 
+const statusLegendItems: Array<{
+  status: FeatureBadgeStatus;
+  description: string;
+  dotClass: string;
+}> = [
+  {
+    status: "building",
+    description: "Active or recently updated work.",
+    dotClass: "bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.16)]",
+  },
+  {
+    status: "implemented",
+    description: "Found in code, awaiting stronger evidence.",
+    dotClass: "bg-blue-400 shadow-[0_0_0_4px_rgba(96,165,250,0.16)]",
+  },
+  {
+    status: "verified",
+    description: "Backed by passing test or completion evidence.",
+    dotClass: "bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.16)]",
+  },
+  {
+    status: "risk",
+    description: "Blocked, failed, or missing important proof.",
+    dotClass: "bg-rose-400 shadow-[0_0_0_4px_rgba(251,113,133,0.16)]",
+  },
+];
+
 const MIN_NODE_HEIGHT = 112;
 const COLUMN_GAP = 390;
 const ROW_GAP = 34;
@@ -314,23 +341,78 @@ const nodeTypes = {
   feature: FeatureNodeCard,
 };
 
+function StatusLegend() {
+  return (
+    <aside
+      aria-label="Node status legend"
+      title="Node status legend"
+      className="group pointer-events-auto absolute left-4 top-24 z-20 hidden h-14 w-14 overflow-hidden rounded-full border border-white/70 bg-white/70 p-2 text-zinc-800 shadow-[0_18px_44px_rgba(24,24,27,0.14)] backdrop-blur-xl transition-[width,height,border-radius,background-color,padding] duration-200 hover:h-auto hover:w-[min(286px,calc(100vw-2rem))] hover:rounded-2xl hover:border-zinc-200/80 hover:bg-white/90 hover:p-3 sm:block"
+    >
+      <div className="flex h-10 items-center gap-3 text-[11px] font-bold uppercase text-zinc-500 group-hover:h-8">
+        <span
+          aria-hidden="true"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-zinc-950 shadow-sm transition group-hover:h-8 group-hover:w-8"
+        >
+          <span className="grid h-4 w-4 grid-cols-2 gap-1">
+            <span className="rounded-full bg-emerald-300" />
+            <span className="rounded-full bg-blue-300" />
+            <span className="rounded-full bg-teal-300" />
+            <span className="rounded-full bg-rose-300" />
+          </span>
+        </span>
+        <div className="min-w-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <div className="whitespace-nowrap text-[11px] font-bold uppercase text-zinc-500">
+            Node status
+          </div>
+          <div className="mt-0.5 whitespace-nowrap text-xs font-bold normal-case text-zinc-900">
+            Status guide
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        {statusLegendItems.map((item) => (
+          <div
+            key={item.status}
+            className="flex gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-zinc-50"
+          >
+            <span
+              aria-hidden="true"
+              className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.dotClass}`}
+            />
+            <div className="min-w-0">
+              <div className="whitespace-nowrap text-xs font-bold text-zinc-900">
+                {statusLabel[item.status]}
+              </div>
+              <div className="mt-0.5 w-56 text-[11px] font-semibold leading-4 text-zinc-500">
+                {item.description}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
 function Inspector({ node }: { node?: ObservedGraphNode }) {
   if (!node) {
     return null;
   }
 
   return (
-    <aside className="pointer-events-auto absolute bottom-[236px] right-5 z-30 w-[320px] rounded-[22px] border border-zinc-200 bg-white/96 p-4 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur">
-      <div className="text-sm font-bold">{node.title}</div>
-      <div className="mt-1 text-xs font-bold text-zinc-500">
-        Status: {statusLabel[displayStatus(node)]}
+    <aside className="pointer-events-auto absolute bottom-24 right-4 top-20 z-30 flex w-[min(360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[22px] border border-zinc-200 bg-white/96 text-zinc-900 shadow-[0_18px_48px_rgba(24,24,27,0.14)] backdrop-blur">
+      <div className="shrink-0 border-b border-zinc-200/80 p-4">
+        <div className="text-sm font-bold leading-5">{node.title}</div>
+        <div className="mt-1 text-xs font-bold text-zinc-500">
+          Status: {statusLabel[displayStatus(node)]}
+        </div>
+        {node.summary ? (
+          <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
+            {node.summary}
+          </p>
+        ) : null}
       </div>
-      {node.summary ? (
-        <p className="mt-3 text-xs font-semibold leading-5 text-zinc-600">
-          {node.summary}
-        </p>
-      ) : null}
-      <div className="mt-4 grid gap-3 text-xs font-semibold text-zinc-600">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 text-xs font-semibold text-zinc-600">
         <div>
           <div className="font-bold text-zinc-900">Evidence</div>
           {node.evidence.length > 0 ? (
@@ -358,7 +440,7 @@ function Inspector({ node }: { node?: ObservedGraphNode }) {
         {node.relatedFiles.length > 0 ? (
           <div>
             <div className="font-bold text-zinc-900">Related files</div>
-            <ul className="mt-1 grid gap-1">
+            <ul className="mt-1 grid max-h-48 gap-1 overflow-y-auto rounded-lg bg-zinc-50 p-2">
               {node.relatedFiles.map((file) => (
                 <li key={file} className="break-all">
                   {file}
@@ -429,6 +511,7 @@ function FeatureCanvasInner({
         {actionControls}
       </div>
 
+      <StatusLegend />
       <Inspector node={selectedNode} />
 
       {runStatusBar || chatPanel ? (

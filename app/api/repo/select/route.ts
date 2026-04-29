@@ -6,6 +6,14 @@ export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
 
+function isFolderSelectionCanceled(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.includes("User canceled") || error.message.includes("(-128)");
+}
+
 export async function POST() {
   if (process.platform !== "darwin") {
     return NextResponse.json(
@@ -26,6 +34,12 @@ export async function POST() {
       repoPath: stdout.trim().replace(/\/$/, ""),
     });
   } catch (error) {
+    if (isFolderSelectionCanceled(error)) {
+      return NextResponse.json({
+        canceled: true,
+      });
+    }
+
     return NextResponse.json(
       {
         error:
