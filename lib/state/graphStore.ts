@@ -6,13 +6,16 @@ import type { GraphEvent } from "@/lib/types/observedGraph";
 
 export function useGraphStore(initialEvents: GraphEvent[] = []) {
   const [events, setEvents] = useState<GraphEvent[]>(initialEvents);
-  const [selectedNodeId, setSelectedNodeId] = useState<string>();
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>();
 
   const graph = useMemo(() => {
     const reduced = reduceGraphEvents(events);
     return {
       ...reduced,
-      selectedNodeId: selectedNodeId ?? reduced.selectedNodeId,
+      selectedNodeId:
+        selectedNodeId === undefined
+          ? reduced.selectedNodeId
+          : selectedNodeId ?? undefined,
     };
   }, [events, selectedNodeId]);
 
@@ -21,7 +24,7 @@ export function useGraphStore(initialEvents: GraphEvent[] = []) {
   }, []);
 
   const clearSelectedNode = useCallback(() => {
-    setSelectedNodeId(undefined);
+    setSelectedNodeId(null);
   }, []);
 
   const applyGraphEvent = useCallback((event: GraphEvent) => {
