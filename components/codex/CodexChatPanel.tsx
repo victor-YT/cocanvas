@@ -317,9 +317,9 @@ export function CodexChatPanel({
   }
 
   return (
-    <section className="relative w-full max-w-[1160px] text-zinc-950">
+    <section className="relative w-full max-w-[860px] text-zinc-950">
       {hasConversation ? (
-        <div className="mb-12 flex items-center gap-2 px-1 text-2xl text-zinc-500">
+        <div className="mb-6 flex items-center gap-2 px-1 text-base text-zinc-500">
           <span>Editing</span>
           <span className="text-blue-500">{changedFileName}</span>
           <span className="text-green-600">+26</span>
@@ -328,7 +328,7 @@ export function CodexChatPanel({
         </div>
       ) : null}
 
-      <div className="mx-10 flex h-16 items-center justify-between rounded-t-[32px] border border-b-0 border-zinc-200 bg-white/92 px-6 text-2xl shadow-sm backdrop-blur">
+      <div className="mx-8 flex h-11 items-center justify-between rounded-t-[22px] border border-b-0 border-zinc-200 bg-white/92 px-5 text-sm shadow-sm backdrop-blur">
         <div className="min-w-0 truncate text-zinc-500">
           {fileCount} files changed{" "}
           <span className="font-medium text-green-600">+258</span>{" "}
@@ -346,13 +346,13 @@ export function CodexChatPanel({
 
       <form
         onSubmit={handleSubmit}
-        className="relative rounded-[34px] border border-zinc-200 bg-white/95 p-5 shadow-[0_18px_44px_rgba(24,24,27,0.09)] backdrop-blur"
+        className="relative rounded-[26px] border border-zinc-200 bg-white/95 p-4 shadow-[0_14px_34px_rgba(24,24,27,0.08)] backdrop-blur"
       >
         {hasConversation ? (
           <button
             type="button"
             title={attachmentLabel}
-            className="mb-3 inline-flex max-w-[220px] items-center gap-2 truncate rounded-full border border-zinc-200 bg-white px-4 py-2 text-lg text-zinc-900 shadow-sm"
+            className="mb-2 inline-flex max-w-[180px] items-center gap-2 truncate rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 shadow-sm"
           >
             <span className="grid h-8 w-8 place-items-center rounded-full bg-zinc-50 text-zinc-400">
               <PaperclipIcon />
@@ -364,18 +364,18 @@ export function CodexChatPanel({
         <textarea
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
-          className="h-24 w-full resize-none bg-transparent text-2xl leading-8 text-zinc-900 outline-none placeholder:text-zinc-300"
+          className="h-14 w-full resize-none bg-transparent text-base leading-6 text-zinc-900 outline-none placeholder:text-zinc-300"
           placeholder={placeholder}
         />
 
         <div className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-5">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               aria-label="Open tools menu"
               aria-expanded={openMenu === "tools"}
               onClick={() => setOpenMenu(openMenu === "tools" ? null : "tools")}
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition ${
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${
                 openMenu === "tools"
                   ? "bg-zinc-100 text-zinc-800"
                   : "text-zinc-500 hover:bg-zinc-100"
@@ -387,7 +387,7 @@ export function CodexChatPanel({
             <button
               type="button"
               onClick={() => onRunFunction("review", options)}
-              className="inline-flex min-w-0 items-center gap-2 text-xl font-medium text-blue-500 transition hover:text-blue-600"
+              className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-blue-500 transition hover:text-blue-600"
               title={`Auto-review ${focusLabel}`}
             >
               <ShieldIcon />
@@ -396,14 +396,14 @@ export function CodexChatPanel({
             </button>
           </div>
 
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-3">
             <SpinnerIcon />
             <button
               type="button"
               aria-label="Open model and intelligence menu"
               aria-expanded={openMenu === "model"}
               onClick={() => setOpenMenu(openMenu === "model" ? null : "model")}
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-zinc-100 px-4 text-xl text-zinc-500 transition hover:bg-zinc-200"
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-zinc-100 px-3 text-sm text-zinc-500 transition hover:bg-zinc-200"
             >
               <BoltIcon className="h-5 w-5 text-zinc-500" />
               <span className="font-medium text-zinc-900">
@@ -423,7 +423,7 @@ export function CodexChatPanel({
               type="submit"
               aria-label={isReplaying ? "Stop task" : "Send message"}
               disabled={!isReplaying && draft.trim().length === 0}
-              className="grid h-14 w-14 place-items-center rounded-full bg-zinc-950 text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-100"
+              className="grid h-11 w-11 place-items-center rounded-full bg-zinc-950 text-white shadow-sm transition hover:bg-zinc-800 disabled:opacity-100"
             >
               {isReplaying || draft.trim().length === 0 ? <StopIcon /> : <ArrowUpIcon />}
             </button>
@@ -431,7 +431,7 @@ export function CodexChatPanel({
         </div>
 
         {openMenu === "tools" ? (
-          <div className="absolute bottom-[74px] left-1 w-[405px] rounded-[28px] border border-zinc-200 bg-white p-5 text-2xl shadow-[0_18px_48px_rgba(24,24,27,0.14)]">
+          <div className="absolute bottom-[60px] left-1 w-[320px] rounded-[22px] border border-zinc-200 bg-white p-4 text-base shadow-[0_14px_38px_rgba(24,24,27,0.12)]">
             <button
               type="button"
               className="flex w-full items-center gap-4 pb-5 text-left text-zinc-950"
@@ -478,7 +478,7 @@ export function CodexChatPanel({
         ) : null}
 
         {openMenu === "model" ? (
-          <div className="absolute bottom-[74px] right-[-26px] w-[400px] rounded-[24px] border border-zinc-200 bg-white p-3 text-xl shadow-[0_18px_48px_rgba(24,24,27,0.14)]">
+          <div className="absolute bottom-[60px] right-[-18px] w-[320px] rounded-[22px] border border-zinc-200 bg-white p-3 text-base shadow-[0_14px_38px_rgba(24,24,27,0.12)]">
             <div className="mb-3 px-3 text-zinc-500">Intelligence</div>
             <div className="grid gap-1">
               {intelligenceOptions.map((item) => (
@@ -533,7 +533,7 @@ export function CodexChatPanel({
         ) : null}
       </form>
 
-      <div className="mt-5 flex items-center gap-12 px-8 text-2xl text-zinc-500">
+      <div className="mt-3 flex items-center gap-8 px-6 text-sm text-zinc-500">
         <button
           type="button"
           onClick={() => updateOption("access", options.access === "workspace" ? "ask" : "workspace")}

@@ -36,7 +36,6 @@ export function AppShell() {
     resetCanvas,
   } = useGraphStore([]);
   const [isReplaying, setIsReplaying] = useState(false);
-  const [currentRun, setCurrentRun] = useState("Demo run");
   const [notice, setNotice] = useState<string>();
   const [mounted, setMounted] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
@@ -70,10 +69,6 @@ export function AppShell() {
 
     setIsReplaying(false);
     setNotice("Demo replay finished.");
-  }
-
-  function runCodexTask() {
-    setNotice("Codex task execution is not wired yet. Use Demo Replay for now.");
   }
 
   function handleResetCanvas() {
@@ -148,14 +143,12 @@ export function AppShell() {
                 <span className="font-semibold text-zinc-900">cocanvas</span>
                 <span className="ml-2 text-zinc-500">/projects/cocanvas</span>
               </div>
-              <label className="flex h-10 items-center rounded-full border border-zinc-200 bg-white/95 px-4 text-sm shadow-sm">
-                <span className="mr-2 text-zinc-500">Run</span>
-                <input
-                  value={currentRun}
-                  onChange={(event) => setCurrentRun(event.target.value)}
-                  className="w-28 bg-transparent font-medium text-zinc-900 outline-none"
-                />
-              </label>
+              <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-sm shadow-sm">
+                <span className="font-medium text-zinc-900">Observed graph</span>
+                <span className="ml-2 text-zinc-500">
+                  {graph.nodes.length} nodes
+                </span>
+              </div>
               {notice ? (
                 <div className="rounded-full border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-500 shadow-sm">
                   {notice}
@@ -171,14 +164,7 @@ export function AppShell() {
                 onClick={runDemoReplay}
                 className="h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
               >
-                {isReplaying ? "Replaying" : "Run Demo Replay"}
-              </button>
-              <button
-                type="button"
-                onClick={runCodexTask}
-                className="h-11 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50"
-              >
-                Run Codex Task
+                {isReplaying ? "Replaying" : "Run Demo"}
               </button>
               <button
                 type="button"
