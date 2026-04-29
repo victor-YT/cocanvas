@@ -19,7 +19,7 @@ import {
 
 const nodeReplayDelayMs = 1000;
 const updateReplayDelayMs = 180;
-const demoProjectLabel = "cocanvas / demo-task-board";
+const demoProjectLabel = "demo-task-board";
 const primaryTopPillClass =
   "h-11 rounded-full bg-zinc-950 px-5 text-sm font-semibold text-white shadow-sm transition-[transform,box-shadow,background-color] duration-150 hover:scale-[1.02] hover:bg-zinc-800 hover:shadow-md disabled:cursor-not-allowed disabled:bg-zinc-400 disabled:hover:scale-100";
 const iconTopPillClass =
@@ -614,16 +614,10 @@ export function AppShell() {
     }
 
     if (!repoPath) {
-      return "cocanvas / no project selected";
+      return "no project selected";
     }
 
-    const name = projectName(repoPath);
-
-    if (name.toLowerCase() === "cocanvas") {
-      return "Project: cocanvas";
-    }
-
-    return `cocanvas / ${name}`;
+    return projectName(repoPath);
   }
 
   function handleSelectNode(nodeId: string) {
