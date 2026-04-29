@@ -416,13 +416,6 @@ function FeatureCanvasInner({
     <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
-        <div className="hidden h-9 items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 text-[11px] font-bold text-zinc-600 shadow-sm md:flex">
-          <span>Feature Map</span>
-          <div className="mx-0.5 h-4 w-px bg-zinc-200" />
-          <span>Pulsing dot = Codex is working here</span>
-          <div className="mx-0.5 h-4 w-px bg-zinc-200" />
-          <span>Click a node to see evidence and risks</span>
-        </div>
       </div>
 
       <div className="absolute right-4 top-4 z-30 flex flex-wrap justify-end gap-2">
