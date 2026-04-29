@@ -40,37 +40,37 @@ type CanvasNode = Node<CanvasNodeData, "observed">;
 
 const statusTone: Record<ObservedNodeStatus, { card: string; dot: string; label: string }> = {
   planned: {
-    card: "border-zinc-200 bg-white text-zinc-800",
+    card: "border-zinc-300 bg-white text-zinc-900",
     dot: "bg-zinc-300",
     label: "Planned",
   },
   building: {
-    card: "border-amber-300 bg-white text-zinc-900 shadow-amber-200/40",
+    card: "border-amber-400 bg-white text-zinc-900",
     dot: "bg-amber-400",
     label: "Building",
   },
   implemented: {
-    card: "border-blue-300 bg-white text-zinc-900 shadow-blue-200/40",
+    card: "border-blue-400 bg-white text-zinc-900",
     dot: "bg-blue-400",
     label: "Implemented",
   },
   needs_evidence: {
-    card: "border-zinc-300 bg-white text-zinc-900",
+    card: "border-zinc-400 bg-white text-zinc-900",
     dot: "bg-zinc-400",
     label: "Needs evidence",
   },
   verified: {
-    card: "border-emerald-300 bg-white text-zinc-900 shadow-emerald-200/40",
+    card: "border-emerald-400 bg-white text-zinc-900",
     dot: "bg-emerald-400",
     label: "Verified",
   },
   risk: {
-    card: "border-rose-300 bg-white text-zinc-900 shadow-rose-200/40",
+    card: "border-rose-400 bg-white text-zinc-900",
     dot: "bg-rose-400",
     label: "Risk",
   },
   unlinked: {
-    card: "border-violet-300 bg-white text-zinc-900 shadow-violet-200/40",
+    card: "border-violet-400 bg-white text-zinc-900",
     dot: "bg-violet-400",
     label: "Unlinked",
   },
@@ -271,7 +271,7 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div
-      className={`cocanvas-node w-[292px] rounded-2xl border px-5 py-4 text-left shadow-[0_10px_30px_rgba(24,24,27,0.07)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(24,24,27,0.11)] ${tone.card} ${
+      className={`cocanvas-node w-[310px] rounded-[18px] border-2 px-5 py-[18px] text-left shadow-[0_12px_28px_rgba(24,24,27,0.08)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(24,24,27,0.12)] ${tone.card} ${
         selected ? "ring-2 ring-zinc-950 ring-offset-2" : ""
       }`}
       role="button"
@@ -279,20 +279,20 @@ function ObservedNodeCard({ data, selected }: NodeProps<CanvasNode>) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-lg font-semibold leading-6 tracking-normal">
+          <div className="truncate text-[19px] font-semibold leading-7 tracking-normal">
             {node.title}
           </div>
-          <div className="mt-1.5 text-xs font-semibold uppercase text-zinc-500">
+          <div className="mt-1.5 text-[12px] font-semibold uppercase text-zinc-500">
             {nodeTypeLabel[node.nodeType]}
           </div>
         </div>
-        <span className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${tone.dot}`} />
+        <span className={`mt-2 h-3.5 w-3.5 shrink-0 rounded-full ${tone.dot}`} />
       </div>
-      <div className="mt-4 inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600">
+      <div className="mt-4 inline-flex rounded-full bg-zinc-100 px-3 py-1 text-[13px] font-semibold text-zinc-700">
         {tone.label}
       </div>
       {node.summary ? (
-        <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-500">
+        <p className="mt-3 line-clamp-2 text-[15px] leading-6 text-zinc-600">
           {node.summary}
         </p>
       ) : null}
@@ -339,7 +339,7 @@ function FeatureCanvasInner({
   }, [fitView, nodes.length]);
 
   return (
-    <section className="relative h-[calc(100vh-24px)] min-h-[640px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
         <div className="hidden items-center gap-3 rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-600 shadow-sm md:flex">
@@ -358,8 +358,7 @@ function FeatureCanvasInner({
 
       {chatPanel ? (
         <div
-          className="absolute bottom-5 left-5 right-5 z-30 flex justify-center"
-          onPointerDown={(event) => event.stopPropagation()}
+          className="pointer-events-none absolute bottom-5 left-5 right-5 z-30 flex justify-center"
         >
           {chatPanel}
         </div>
@@ -375,10 +374,15 @@ function FeatureCanvasInner({
         defaultViewport={{ x: 0, y: 0, zoom: 0.82 }}
         minZoom={0.35}
         maxZoom={1.6}
-        panOnDrag
+        panOnDrag={[0, 1, 2]}
         panOnScroll
         panOnScrollMode={PanOnScrollMode.Free}
-        nodesDraggable
+        panOnScrollSpeed={1.1}
+        zoomOnScroll={false}
+        zoomOnPinch
+        zoomOnDoubleClick={false}
+        preventScrolling
+        nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}

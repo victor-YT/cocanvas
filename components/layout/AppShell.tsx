@@ -11,10 +11,23 @@ import {
   type CodexRunOptions,
 } from "@/components/codex/CodexChatPanel";
 
-const replayDelayMs = 420;
+const nodeReplayDelayMs = 1000;
+const updateReplayDelayMs = 180;
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function replayDelayForEvent(event: (typeof mockGraphEvents)[number]) {
+  if (
+    event.type === "node.upsert" ||
+    event.type === "evidence.add" ||
+    event.type === "risk.add"
+  ) {
+    return nodeReplayDelayMs;
+  }
+
+  return updateReplayDelayMs;
 }
 
 const functionPrompts: Record<CodexFunctionId, string> = {
@@ -63,7 +76,7 @@ export function AppShell() {
     resetCanvas();
 
     for (const event of mockGraphEvents) {
-      await wait(replayDelayMs);
+      await wait(replayDelayForEvent(event));
       applyGraphEvent(event);
     }
 
@@ -131,8 +144,8 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f4] text-zinc-950">
-      <main className="min-h-screen p-3">
+    <div className="min-h-screen bg-white text-zinc-950">
+      <main className="min-h-screen">
         <FeatureCanvas
           graph={graph}
           selectedNodeId={graph.selectedNodeId}

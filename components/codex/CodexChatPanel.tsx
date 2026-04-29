@@ -317,7 +317,7 @@ export function CodexChatPanel({
   }
 
   return (
-    <section className="relative w-full max-w-[720px] text-zinc-950">
+    <section className="pointer-events-auto relative w-full max-w-[720px] text-zinc-950">
       {hasConversation ? (
         <div className="mb-6 flex items-center gap-2 px-1 text-base text-zinc-500">
           <span>Editing</span>
