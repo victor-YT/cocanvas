@@ -342,7 +342,7 @@ function FeatureCanvasInner({
     <section className="relative h-screen min-h-[640px] overflow-hidden bg-white">
       <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2">
         {topControls}
-        <div className="hidden items-center gap-3 rounded-xl border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-600 shadow-sm md:flex">
+        <div className="hidden h-11 items-center gap-3 rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-600 shadow-sm md:flex">
           {Object.entries(statusTone).map(([status, tone]) => (
             <div key={status} className="flex items-center gap-1.5">
               <span className={`h-2.5 w-2.5 rounded-full ${tone.dot}`} />

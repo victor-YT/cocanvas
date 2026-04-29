@@ -152,12 +152,12 @@ export function AppShell() {
           onSelectNode={selectNode}
           topControls={
             <>
-              <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-sm shadow-sm">
+              <div className="inline-flex h-11 items-center rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold shadow-sm">
                 <span className="font-semibold text-zinc-900">cocanvas</span>
-                <span className="ml-2 text-zinc-500">/projects/cocanvas</span>
+                <span className="ml-2 font-semibold text-zinc-500">/projects/cocanvas</span>
               </div>
               {notice ? (
-                <div className="rounded-full border border-zinc-200 bg-white/95 px-3 py-2 text-xs text-zinc-500 shadow-sm">
+                <div className="inline-flex h-11 items-center rounded-full border border-zinc-200 bg-white/95 px-5 text-sm font-semibold text-zinc-500 shadow-sm">
                   {notice}
                 </div>
               ) : null}
