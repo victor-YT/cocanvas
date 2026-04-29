@@ -112,7 +112,7 @@ export function AppShell() {
   }
 
   function describeOptions(options: CodexRunOptions) {
-    return `${options.model}, ${options.speed}, ${options.access}`;
+    return options.model === "auto" ? "the default Codex model" : options.model;
   }
 
   function modelForCodex(options: CodexRunOptions) {
@@ -266,7 +266,7 @@ export function AppShell() {
               selectedNode={selectedNode}
               messages={chatMessages}
               draft={chatDraft}
-              isReplaying={isReplaying || isCodexRunning}
+              isRunning={isReplaying || isCodexRunning}
               onDraftChange={setChatDraft}
               onSubmit={submitCodexChat}
               onRunFunction={runCodexFunction}
